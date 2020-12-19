@@ -19,7 +19,7 @@ const { expect } = require("chai");
 
 let { testImmutableClass } = require("immutable-class-tester");
 
-let { Timezone } = require('chronoshift');
+let { Timezone } = require('@topgames/chronoshift');
 let plywood = require('../plywood');
 let { TimeRange, $, ply, r } = plywood;
 

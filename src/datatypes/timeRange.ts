@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Duration, parseISODate, Timezone } from 'chronoshift';
+import { Duration, parseISODate, Timezone } from '@topgames/chronoshift';
 import { Class, Instance } from 'immutable-class';
 import { Expression } from '../expressions/baseExpression';
 import { NumberRange } from './numberRange';

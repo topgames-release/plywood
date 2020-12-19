@@ -16,7 +16,7 @@
  */
 
 const { expect } = require("chai");
-const { Duration } = require("chronoshift");
+const { Duration } = require("@topgames/chronoshift");
 let { sane } = require('../utils');
 
 let { druidRequesterFactory } = require('plywood-druid-requester');

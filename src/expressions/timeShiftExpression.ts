@@ -15,7 +15,7 @@
  */
 
 
-import { Duration, Timezone } from 'chronoshift';
+import { Duration, Timezone } from '@topgames/chronoshift';
 import { immutableEqual } from 'immutable-class';
 import { PlywoodValue } from '../datatypes/index';
 import { SQLDialect } from '../dialect/baseDialect';

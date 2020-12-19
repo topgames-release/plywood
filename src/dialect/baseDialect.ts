@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Duration, Timezone } from 'chronoshift';
+import { Duration, Timezone } from '@topgames/chronoshift';
 import { PlyType, PlyTypeSimple } from '../types';
 
 

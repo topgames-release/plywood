@@ -19,7 +19,7 @@ let { sane, grabConsoleWarn } = require('../utils');
 
 let { testImmutableClass } = require("immutable-class-tester");
 
-const { Duration, Timezone } = require('chronoshift');
+const { Duration, Timezone } = require('@topgames/chronoshift');
 let plywood = require('../plywood');
 let { Expression, Dataset, External, TimeRange, AttributeInfo, $, ply, r } = plywood;
 

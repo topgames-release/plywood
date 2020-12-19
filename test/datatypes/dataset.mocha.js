@@ -16,7 +16,7 @@
  */
 
 const { expect } = require("chai");
-const { Timezone } = require('chronoshift');
+const { Timezone } = require('@topgames/chronoshift');
 const { testImmutableClass } = require("immutable-class-tester");
 
 const { sane } = require('../utils');

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { parseISODate } from 'chronoshift';
+import { parseISODate } from '@topgames/chronoshift';
 import * as hasOwnProp from 'has-own-prop';
 import { isImmutableClass } from 'immutable-class';
 import { getValueType, valueFromJS } from '../datatypes/common';

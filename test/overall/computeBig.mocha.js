@@ -22,7 +22,7 @@ let path = require('path');
 let plywood = require('../plywood');
 let { Expression, Dataset, $, ply, r } = plywood;
 
-let chronoshift = require("chronoshift");
+let chronoshift = require("@topgames/chronoshift");
 
 let rawData = fs.readFileSync(path.join(__dirname, '../../resources/wikipedia-sampled.json'), 'utf-8');
 let wikiDayData = Dataset.parseJSON(rawData);

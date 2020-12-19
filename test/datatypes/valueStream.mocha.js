@@ -15,7 +15,7 @@
  */
 
 const { expect } = require("chai");
-const { Timezone } = require('chronoshift');
+const { Timezone } = require('@topgames/chronoshift');
 
 const { sane } = require('../utils');
 const plywood = require('../plywood');

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { isDate } from 'chronoshift';
+import { isDate } from '@topgames/chronoshift';
 import { NamedArray } from 'immutable-class';
 
 import { AttributeInfo, NumberRange, PlywoodRange, Range, Set, TimeRange } from '../../datatypes/index';

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Duration, Timezone } from 'chronoshift';
+import { Duration, Timezone } from '@topgames/chronoshift';
 import * as hasOwnProp from 'has-own-prop';
 import { immutableArraysEqual, immutableLookupsEqual, NamedArray, SimpleArray } from 'immutable-class';
 import { PlywoodRequester } from 'plywood-base-api';

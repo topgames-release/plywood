@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { isDate } from 'chronoshift';
+import { isDate } from '@topgames/chronoshift';
 import * as hasOwnProp from 'has-own-prop';
 import { Expression } from '../expressions/baseExpression';
 import { External } from '../external/baseExternal';

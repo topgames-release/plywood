@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Timezone } from 'chronoshift';
+import { Timezone } from '@topgames/chronoshift';
 import { immutableEqual } from 'immutable-class';
 import * as moment from 'moment-timezone';
 import { PlywoodValue } from '../datatypes/index';

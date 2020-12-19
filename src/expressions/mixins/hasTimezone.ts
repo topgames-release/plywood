@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Timezone } from 'chronoshift';
+import { Timezone } from '@topgames/chronoshift';
 import { Environment } from '../../types';
 import { Expression, ExpressionValue } from '../baseExpression';
 

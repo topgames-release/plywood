@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Duration, parseISODate, Timezone } from 'chronoshift';
+import { Duration, parseISODate, Timezone } from '@topgames/chronoshift';
 import * as hasOwnProp from 'has-own-prop';
 import { Instance, isImmutableClass, generalLookupsEqual } from 'immutable-class';
 import { PassThrough } from 'readable-stream';

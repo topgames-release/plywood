@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Duration, Timezone } from 'chronoshift';
+import { Duration, Timezone } from '@topgames/chronoshift';
 import { immutableEqual } from 'immutable-class';
 import { PlywoodValue, Set, TimeRange } from '../datatypes/index';
 import { SQLDialect } from '../dialect/baseDialect';

@@ -1,5 +1,5 @@
 {
-  "name": "plywood",
+  "name": "@topgames/plywood",
   "version": "0.21.2",
   "description": "A query planner and executor",
   "keywords": [
@@ -10,13 +10,13 @@
     "query planner"
   ],
   "author": {
-    "name": "Vadim Ogievetsky",
-    "url": "http://vadim.ogievetsky.com"
+    "name": "Ying Wang",
+    "url": "http://upcwangying.com"
   },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "http://github.com/implydata/plywood.git"
+    "url": "http://github.com/topgames-release/plywood.git"
   },
   "main": "build/plywood.js",
   "typings": "build/index.d.ts",
@@ -34,7 +34,7 @@
   },
   "tonicExampleFilename": "docs/examples/tonic.js",
   "dependencies": {
-    "chronoshift": "^0.9.4",
+    "@topgames/chronoshift": "^0.9.4",
     "druid.d.ts": "^0.12.1",
     "has-own-prop": "^1.0.1",
     "immutable-class": "^0.9.4",
@@ -58,5 +58,8 @@
     "tdi": "0.6.5",
     "tslint": "5.18.0",
     "typescript": "3.5.3"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

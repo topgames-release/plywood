@@ -21,7 +21,7 @@ var immutableLookupsEqual = immutableClass.immutableLookupsEqual;
 var SimpleArray = immutableClass.SimpleArray;
 var NamedArray = immutableClass.NamedArray;
 
-var Chronoshift = require('chronoshift');
+var Chronoshift = require('@topgames/chronoshift');
 var Timezone = Chronoshift.Timezone;
 var Duration = Chronoshift.Duration;
 var moment = Chronoshift.moment;

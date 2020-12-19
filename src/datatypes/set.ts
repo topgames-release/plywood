@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Timezone } from 'chronoshift';
+import { Timezone } from '@topgames/chronoshift';
 import * as hasOwnProp from 'has-own-prop';
 import { Class, Instance, generalEqual } from 'immutable-class';
 import { PlyType } from '../types';

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { Timezone } from 'chronoshift';
+import { Timezone } from '@topgames/chronoshift';
 import { PlyType } from '../types';
 
 const BOUNDS_REG_EXP = /^[\[(][\])]$/;

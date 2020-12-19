@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { isDate, Timezone } from 'chronoshift';
+import { isDate, Timezone } from '@topgames/chronoshift';
 import * as hasOwnProp from 'has-own-prop';
 import { Class, generalEqual, Instance, NamedArray, SimpleArray } from 'immutable-class';
 import {

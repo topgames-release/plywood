@@ -18,7 +18,7 @@
 const { expect } = require("chai");
 let { sane } = require('../utils');
 
-let { Timezone } = require('chronoshift');
+let { Timezone } = require('@topgames/chronoshift');
 
 let plywood = require('../plywood');
 let { Expression, i$, $, ply, r, Set } = plywood;
