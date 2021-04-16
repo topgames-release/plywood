@@ -637,7 +637,8 @@ export abstract class External {
     });
   }
 
-  static performQueryAndPostTransform(queryAndPostTransform: QueryAndPostTransform<any>, requester: PlywoodRequester<any>, engine: string, rawQueries: any[] | null): ReadableStream {
+  // tslint:disable-next-line:max-line-length
+  static performQueryAndPostTransform(queryAndPostTransform: QueryAndPostTransform<any>, requester: PlywoodRequester<any>, engine: string, rawQueries: any[] | null, customOptions: any): ReadableStream {
     if (!requester) {
       return new ReadableError('must have a requester to make queries');
     }
@@ -645,6 +646,9 @@ export abstract class External {
     let { query, context, postTransform, next } = queryAndPostTransform;
     if (!query || !postTransform) {
       return new ReadableError('no query or postTransform');
+    }
+    if (customOptions && customOptions.uid) {
+      context.uid = customOptions.uid;
     }
 
     if (next) {
@@ -1554,8 +1558,8 @@ export abstract class External {
     throw new Error("can not call getQueryAndPostTransform directly");
   }
 
-  public queryValue(lastNode: boolean, rawQueries: any[], externalForNext: External = null): Promise<PlywoodValue | TotalContainer> {
-    const stream = this.queryValueStream(lastNode, rawQueries, externalForNext);
+  public queryValue(lastNode: boolean, rawQueries: any[], customOptions: any, externalForNext: External = null): Promise<PlywoodValue | TotalContainer> {
+    const stream = this.queryValueStream(lastNode, rawQueries, externalForNext, customOptions);
     let valuePromise = External.buildValueFromStream(stream);
 
     if (this.mode === 'total') {
@@ -1567,7 +1571,7 @@ export abstract class External {
     return valuePromise;
   }
 
-  protected queryBasicValueStream(rawQueries: any[] | null): ReadableStream {
+  protected queryBasicValueStream(rawQueries: any[] | null, customOptions: any): ReadableStream {
     const { engine, requester } = this;
 
     let queryAndPostTransform: QueryAndPostTransform<any>;
@@ -1576,19 +1580,17 @@ export abstract class External {
     } catch (e) {
       return new ReadableError(e);
     }
-
-    return External.performQueryAndPostTransform(queryAndPostTransform, requester, engine, rawQueries);
+    return External.performQueryAndPostTransform(queryAndPostTransform, requester, engine, rawQueries, customOptions);
   }
 
-  public queryValueStream(lastNode: boolean, rawQueries: any[] | null, externalForNext: External = null): ReadableStream {
+  public queryValueStream(lastNode: boolean, rawQueries: any[] | null, externalForNext: External = null, customOptions?: any): ReadableStream {
     if (!externalForNext) externalForNext = this;
 
     let delegate = this.getDelegate();
     if (delegate) {
-      return delegate.queryValueStream(lastNode, rawQueries, externalForNext);
+      return delegate.queryValueStream(lastNode, rawQueries, externalForNext, customOptions);
     }
-
-    let finalStream = this.queryBasicValueStream(rawQueries);
+    let finalStream = this.queryBasicValueStream(rawQueries, customOptions);
 
     if (!lastNode && this.mode === 'split') {
       finalStream = pipeWithError(finalStream, new Transform({

@@ -101,6 +101,7 @@ import { TimeShiftExpression } from './timeShiftExpression';
 import { TransformCaseExpression } from './transformCaseExpression';
 
 export interface ComputeOptions extends Environment {
+  customOptions?: any;
   rawQueries?: any[];
   maxQueries?: number;
   maxRows?: number;
@@ -1838,6 +1839,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
   private _computeResolved(options: ComputeOptions): Promise<PlywoodValue> {
     const {
+      customOptions = null,
       rawQueries,
       maxComputeCycles = 5,
       maxQueries = 500,
@@ -1850,14 +1852,13 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
     let computeCycles = 0;
     let queriesMade = 0;
-
     return promiseWhile(
       () => Object.keys(readyExternals).length > 0 && computeCycles < maxComputeCycles && queriesMade < maxQueries,
       async () => {
         const readyExternalsFilled = await fillExpressionExternalAlterationAsync(readyExternals, (external, terminal) => {
           if (queriesMade < maxQueries) {
             queriesMade++;
-            return external.queryValue(terminal, rawQueries);
+            return external.queryValue(terminal, rawQueries, customOptions);
           } else {
             queriesMade++;
             return Promise.resolve(null); // Query limit reached, don't do any more queries.
