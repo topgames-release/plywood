@@ -77,6 +77,7 @@ import { LookupExpression } from './lookupExpression';
 import { MatchExpression } from './matchExpression';
 import { MaxExpression } from './maxExpression';
 import { MinExpression } from './minExpression';
+import { ModExpression } from './modExpression';
 import { MultiplyExpression } from './multiplyExpression';
 import { NotExpression } from './notExpression';
 import { NumberBucketExpression } from './numberBucketExpression';
@@ -1150,6 +1151,10 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
   public divide(...exs: any[]) {
     return this._mkChain<DivideExpression>(DivideExpression, exs);
+  }
+
+  public mod(...exs: any[]) {
+    return this._mkChain<ModExpression>(ModExpression, exs);
   }
 
   public reciprocate() {

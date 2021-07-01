@@ -470,7 +470,8 @@ function naryExpressionWithAltFactory(op, head, tail, altToken, altOp) {
   if (!tail.length) return head;
   for (var i = 0; i < tail.length; i++) {
     var t = tail[i];
-    head = head[t[0] === altToken ? altOp : op].call(head, t[1]);
+    var idx = altToken.indexOf(t[0]);
+    head = head[idx >= 0 ? altOp[idx] : op].call(head, t[1]);
   }
   return head;
 }
@@ -857,16 +858,16 @@ ComparisonOp "Comparison"
 
 AdditiveExpression
   = head:MultiplicativeExpression tail:(AdditiveOp MultiplicativeExpression)*
-    { return naryExpressionWithAltFactory('add', head, tail, '-', 'subtract'); }
+    { return naryExpressionWithAltFactory('add', head, tail, ['-'], ['subtract']); }
 
 AdditiveOp = op:("+" / "-") !"+" _ { return op; }
 
 
 MultiplicativeExpression
   = head:UnaryExpression tail:(MultiplicativeOp UnaryExpression)*
-    { return naryExpressionWithAltFactory('multiply', head, tail, '/', 'divide'); }
+    { return naryExpressionWithAltFactory('multiply', head, tail, ['/', '%'], ['divide', 'mod']); }
 
-MultiplicativeOp = op:("*" / "/") _ { return op; }
+MultiplicativeOp = op:("*" / "/" / "%") _ { return op; }
 
 
 UnaryExpression

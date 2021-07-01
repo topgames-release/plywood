@@ -39,6 +39,7 @@ import {
   MaxExpression,
   MinExpression,
   MultiplyExpression,
+  ModExpression,
   PowerExpression,
   QuantileExpression,
   RefExpression,
@@ -665,6 +666,13 @@ export class DruidAggregationBuilder {
       return {
         type: 'arithmetic',
         fn: '/',
+        fields: ex.getExpressionList().map(e => this.expressionToPostAggregation(e, aggregations, postAggregations))
+      };
+
+    } else if (ex instanceof ModExpression) {
+      return {
+        type: 'arithmetic',
+        fn: '%',
         fields: ex.getExpressionList().map(e => this.expressionToPostAggregation(e, aggregations, postAggregations))
       };
 

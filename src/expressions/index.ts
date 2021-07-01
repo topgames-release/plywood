@@ -53,6 +53,7 @@ export * from './matchExpression';
 export * from './maxExpression';
 export * from './minExpression';
 export * from './multiplyExpression';
+export * from './modExpression';
 export * from './notExpression';
 export * from './numberBucketExpression';
 export * from './orExpression';

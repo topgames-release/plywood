@@ -42,6 +42,7 @@ import {
   TransformCaseExpression,
   MultiplyExpression,
   MatchExpression,
+  ModExpression,
   AddExpression,
   SubtractExpression,
   DivideExpression,
@@ -273,6 +274,16 @@ export class DruidExpressionBuilder {
             return `if(${ex2}!=0,(cast(${ex1},'DOUBLE')/${ex2}),${nullValue})`;
           }
 
+        } else if (expression instanceof ModExpression) {
+          if (myExpression instanceof LiteralExpression) {
+            return `(cast(${ex1},'LONG')%${ex2})`;
+          } else {
+            let nullValue = 'null';
+            if (this.versionBefore('0.13.0')) {
+              nullValue = '0';
+            }
+            return `if(${ex2}!=0,(cast(${ex1},'LONG')%${ex2}),${nullValue})`;
+          }
         } else if (expression instanceof PowerExpression) {
           return `pow(${ex1},${ex2})`;
 
