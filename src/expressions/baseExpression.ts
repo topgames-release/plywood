@@ -398,6 +398,7 @@ export interface PEGParser {
  * This class is the backbone of plywood
  */
 export abstract class Expression implements Instance<ExpressionValue, ExpressionJS> {
+  static POSITIVE_INFINITY: LiteralExpression;
   static NULL: LiteralExpression;
   static ZERO: LiteralExpression;
   static ONE: LiteralExpression;

@@ -46,11 +46,16 @@ export class DivideExpression extends ChainableUnaryExpression {
   }
 
   protected specialSimplify(): Expression {
+    const { operand, expression } = this;
+
+    // 0 / X
+    if (operand.equals(Expression.ZERO)) return Expression.ZERO;
+
     // X / 0
-    if (this.expression.equals(Expression.ZERO)) return Expression.NULL;
+    if (expression.equals(Expression.ZERO)) return Expression.POSITIVE_INFINITY;
 
     // X / 1
-    if (this.expression.equals(Expression.ONE)) return this.operand;
+    if (expression.equals(Expression.ONE)) return operand;
 
     return this;
   }

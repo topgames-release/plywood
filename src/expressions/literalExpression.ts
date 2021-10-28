@@ -196,6 +196,7 @@ export class LiteralExpression extends Expression {
   }
 }
 
+Expression.POSITIVE_INFINITY = new LiteralExpression({ value: Infinity });
 Expression.NULL = new LiteralExpression({ value: null });
 Expression.ZERO = new LiteralExpression({ value: 0 });
 Expression.ONE = new LiteralExpression({ value: 1 });
