@@ -264,16 +264,15 @@ export class DruidExpressionBuilder {
 
         } else if (expression instanceof DivideExpression) {
           // Need to cast to double otherwise it might default to integer division and no one wants that
-          // if (myExpression instanceof LiteralExpression) {
-          //   return `(cast(${ex1},'DOUBLE')/${ex2})`;
-          // } else {
-          //   let nullValue = 'null';
-          //   if (this.versionBefore('0.13.0')) {
-          //     nullValue = '0';
-          //   }
-          //   return `if(${ex2}!=0,(cast(${ex1},'DOUBLE')/${ex2}),${nullValue})`;
-          // }
-          return `(cast(${ex1},'DOUBLE')/${ex2})`;
+          if (myExpression instanceof LiteralExpression) {
+            return `(cast(${ex1},'DOUBLE')/${ex2})`;
+          } else {
+            let nullValue = Number.MAX_SAFE_INTEGER;
+            // if (this.versionBefore('0.13.0')) {
+            //   nullValue = '0';
+            // }
+            return `if(${ex2}!=0,(cast(${ex1},'DOUBLE')/${ex2}),${nullValue})`;
+          }
         } else if (expression instanceof ModExpression) {
           if (myExpression instanceof LiteralExpression) {
             return `(cast(${ex1},'LONG')%${ex2})`;

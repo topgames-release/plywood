@@ -52,7 +52,7 @@ export class DivideExpression extends ChainableUnaryExpression {
     if (operand.equals(Expression.ZERO)) return Expression.ZERO;
 
     // X / 0
-    if (expression.equals(Expression.ZERO)) return Expression.POSITIVE_INFINITY;
+    if (expression.equals(Expression.ZERO)) return Expression.MAX_SAFE_INTEGER;
 
     // X / 1
     if (expression.equals(Expression.ONE)) return operand;
