@@ -34,15 +34,15 @@ export class DivideExpression extends ChainableUnaryExpression {
 
   protected _calcChainableUnaryHelper(operandValue: any, expressionValue: any): PlywoodValue {
     if (operandValue === null || expressionValue === null) return null;
-    return Set.crossBinary(operandValue, expressionValue, (a, b) => b !== 0 ? a / b : null);
+    return Set.crossBinary(operandValue, expressionValue, (a, b) => a === 0 ? 0 : b === 0 ? Number.MAX_SAFE_INTEGER : a / b);
   }
 
   protected _getJSChainableUnaryHelper(operandJS: string, expressionJS: string): string {
-    return `(_=${expressionJS},(_===0||isNaN(_)?null:${operandJS}/${expressionJS}))`;
+    return `(_o=${operandJS},_e=${expressionJS},((_o===0||isNaN(_o)?0:(_e===0||isNaN(_e)?${Number.MAX_SAFE_INTEGER}:${operandJS}/${expressionJS})))`;
   }
 
   protected _getSQLChainableUnaryHelper(dialect: SQLDialect, operandSQL: string, expressionSQL: string): string {
-    return `(${operandSQL}/${expressionSQL})`;
+    return `(CASE WHEN ${operandSQL} = '0' THEN 0 CASE WHEN ${expressionSQL} = '0' THEN ${Number.MAX_SAFE_INTEGER} ELSE (${operandSQL}/${expressionSQL}) END)`;
   }
 
   protected specialSimplify(): Expression {
