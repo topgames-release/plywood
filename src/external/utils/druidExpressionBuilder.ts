@@ -43,6 +43,7 @@ import {
   MultiplyExpression,
   MatchExpression,
   ModExpression,
+  BitwiseAndExpression,
   AddExpression,
   SubtractExpression,
   DivideExpression,
@@ -283,6 +284,8 @@ export class DruidExpressionBuilder {
             }
             return `if(${ex2}!=0,(cast(${ex1},'LONG')%${ex2}),${nullValue})`;
           }
+        } else if (expression instanceof BitwiseAndExpression) {
+          return `(${ex1}&${ex2})`;
         } else if (expression instanceof PowerExpression) {
           return `pow(${ex1},${ex2})`;
 

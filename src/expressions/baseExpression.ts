@@ -48,6 +48,7 @@ import { AddExpression } from './addExpression';
 import { AndExpression } from './andExpression';
 import { ApplyExpression } from './applyExpression';
 import { AverageExpression } from './averageExpression';
+import { BitwiseAndExpression } from './bitwiseAndExpression';
 import { CardinalityExpression } from './cardinalityExpression';
 import { CastExpression } from './castExpression';
 import { CollectExpression } from './collectExpression';
@@ -1156,6 +1157,10 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
   public mod(...exs: any[]) {
     return this._mkChain<ModExpression>(ModExpression, exs);
+  }
+
+  public bitwiseAnd(...exs: any[]) {
+    return this._mkChain<BitwiseAndExpression>(BitwiseAndExpression, exs);
   }
 
   public reciprocate() {

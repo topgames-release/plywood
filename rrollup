@@ -41,6 +41,7 @@ cat \
   build/expressions/andExpression.js \
   build/expressions/applyExpression.js \
   build/expressions/averageExpression.js \
+  build/expressions/bitwiseAndExpression.js \
   build/expressions/cardinalityExpression.js \
   build/expressions/castExpression.js \
   build/expressions/collectExpression.js \
@@ -141,6 +142,7 @@ cat \
   build/expressions/andExpression.js \
   build/expressions/applyExpression.js \
   build/expressions/averageExpression.js \
+  build/expressions/bitwiseAndExpression.js \
   build/expressions/cardinalityExpression.js \
   build/expressions/castExpression.js \
   build/expressions/collectExpression.js \

@@ -24,6 +24,7 @@ export * from './addExpression';
 export * from './andExpression';
 export * from './applyExpression';
 export * from './averageExpression';
+export * from './bitwiseAndExpression';
 export * from './cardinalityExpression';
 export * from './castExpression';
 export * from './collectExpression';

@@ -40,6 +40,7 @@ import {
   MinExpression,
   MultiplyExpression,
   ModExpression,
+  BitwiseAndExpression,
   PowerExpression,
   QuantileExpression,
   RefExpression,
@@ -673,6 +674,13 @@ export class DruidAggregationBuilder {
       return {
         type: 'arithmetic',
         fn: '%',
+        fields: ex.getExpressionList().map(e => this.expressionToPostAggregation(e, aggregations, postAggregations))
+      };
+
+    } else if (ex instanceof BitwiseAndExpression) {
+      return {
+        type: 'arithmetic',
+        fn: '&',
         fields: ex.getExpressionList().map(e => this.expressionToPostAggregation(e, aggregations, postAggregations))
       };
 

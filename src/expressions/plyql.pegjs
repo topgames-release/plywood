@@ -865,9 +865,9 @@ AdditiveOp = op:("+" / "-") !"+" _ { return op; }
 
 MultiplicativeExpression
   = head:UnaryExpression tail:(MultiplicativeOp UnaryExpression)*
-    { return naryExpressionWithAltFactory('multiply', head, tail, ['/', '%'], ['divide', 'mod']); }
+    { return naryExpressionWithAltFactory('multiply', head, tail, ['/', '%', '&'], ['divide', 'mod', 'bitwiseAnd']); }
 
-MultiplicativeOp = op:("*" / "/" / "%") _ { return op; }
+MultiplicativeOp = op:("*" / "/" / "%" / '&') _ { return op; }
 
 
 UnaryExpression

@@ -127,9 +127,9 @@ AdditiveOp = op:("+" / "-") !"+" _ { return op; }
 
 MultiplicativeExpression
   = head:ExponentialExpression tail:(MultiplicativeOp ExponentialExpression)*
-    { return naryExpressionWithAltFactory('multiply', head, tail, ['/', '%'], ['divide', 'mod']); }
+    { return naryExpressionWithAltFactory('multiply', head, tail, ['/', '%', '&'], ['divide', 'mod', 'bitwiseAnd']); }
 
-MultiplicativeOp = op:("*" / "/" / "%") _ { return op; }
+MultiplicativeOp = op:("*" / "/" / "%" / "&") _ { return op; }
 
 
 ExponentialExpression
