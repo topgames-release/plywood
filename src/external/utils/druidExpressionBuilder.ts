@@ -285,7 +285,8 @@ export class DruidExpressionBuilder {
             return `if(${ex2}!=0,(cast(${ex1},'LONG')%${ex2}),${nullValue})`;
           }
         } else if (expression instanceof BitwiseAndExpression) {
-          return `(${ex1}&${ex2})`;
+          this.checkDruid22('bitwiseAnd');
+          return `bitwiseAnd(${ex1},${ex2})`;
         } else if (expression instanceof PowerExpression) {
           return `pow(${ex1},${ex2})`;
 
@@ -406,6 +407,12 @@ export class DruidExpressionBuilder {
   private checkDruid11(expr: string): void {
     if (this.versionBefore('0.11.0')) {
       throw new Error(`expression '${expr}' requires Druid 0.11.0 or newer`);
+    }
+  }
+
+  private checkDruid22(expr: string): void {
+    if (this.versionBefore('0.22.0')) {
+      throw new Error(`expression '${expr}' requires Druid 0.22.0 or newer`);
     }
   }
 

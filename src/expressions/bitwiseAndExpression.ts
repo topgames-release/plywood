@@ -38,7 +38,7 @@ export class BitwiseAndExpression extends ChainableUnaryExpression {
   }
 
   protected _getJSChainableUnaryHelper(operandJS: string, expressionJS: string): string {
-    return `(${operandJS}&${expressionJS}`;
+    return `(${operandJS}&${expressionJS})`;
   }
 
   protected _getSQLChainableUnaryHelper(dialect: SQLDialect, operandSQL: string, expressionSQL: string): string {
