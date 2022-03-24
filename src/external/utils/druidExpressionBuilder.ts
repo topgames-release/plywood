@@ -268,11 +268,10 @@ export class DruidExpressionBuilder {
           if (myExpression instanceof LiteralExpression) {
             return `(cast(${ex1},'DOUBLE')/${ex2})`;
           } else {
-            let nullValue = Number.MAX_SAFE_INTEGER;
             // if (this.versionBefore('0.13.0')) {
             //   nullValue = '0';
             // }
-            return `if(${ex2}!=0,(cast(${ex1},'DOUBLE')/${ex2}),${nullValue})`;
+            return `if(${ex1}!=0,(if(${ex2}!=0,(cast(${ex1},'DOUBLE')/${ex2}),${Number.MAX_SAFE_INTEGER})),0)`;
           }
         } else if (expression instanceof ModExpression) {
           if (myExpression instanceof LiteralExpression) {
