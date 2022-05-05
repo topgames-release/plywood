@@ -1559,6 +1559,7 @@ export abstract class External {
   }
 
   public queryValue(lastNode: boolean, rawQueries: any[], customOptions: any, externalForNext: External = null): Promise<PlywoodValue | TotalContainer> {
+    // todo: 4
     const stream = this.queryValueStream(lastNode, rawQueries, externalForNext, customOptions);
     let valuePromise = External.buildValueFromStream(stream);
 
@@ -1576,6 +1577,7 @@ export abstract class External {
 
     let queryAndPostTransform: QueryAndPostTransform<any>;
     try {
+      // todo: 6
       queryAndPostTransform = this.getQueryAndPostTransform();
     } catch (e) {
       return new ReadableError(e);
@@ -1590,6 +1592,7 @@ export abstract class External {
     if (delegate) {
       return delegate.queryValueStream(lastNode, rawQueries, externalForNext, customOptions);
     }
+    // todo: 5
     let finalStream = this.queryBasicValueStream(rawQueries, customOptions);
 
     if (!lastNode && this.mode === 'split') {

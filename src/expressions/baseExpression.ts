@@ -1807,6 +1807,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
           // Top level externals need to be unsuppressed
           readyExpression = readyExpression.unsuppress();
         }
+        // todo: 2
         return readyExpression._computeResolved(options);
       });
   }
@@ -1869,6 +1870,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
         const readyExternalsFilled = await fillExpressionExternalAlterationAsync(readyExternals, (external, terminal) => {
           if (queriesMade < maxQueries) {
             queriesMade++;
+            // todo: 3
             return external.queryValue(terminal, rawQueries, customOptions);
           } else {
             queriesMade++;
