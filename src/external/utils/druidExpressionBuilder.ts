@@ -225,7 +225,7 @@ export class DruidExpressionBuilder {
 
       } else if (expression instanceof TimeFloorExpression || expression instanceof TimeBucketExpression) {
         this.checkDruid11('timestamp_floor');
-        return `timestamp_floor(${ex1},'${expression.duration}','',${DruidExpressionBuilder.escapeLiteral(expression.timezone.toString())})`;
+        return `timestamp_floor(${ex1},'${expression.duration}','1970-01-04T00Z',${DruidExpressionBuilder.escapeLiteral(expression.timezone.toString())})`;
 
       } else if (expression instanceof TimeShiftExpression) {
         this.checkDruid11('timestamp_shift');
