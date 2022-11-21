@@ -647,7 +647,7 @@ export abstract class External {
     if (!query || !postTransform) {
       return new ReadableError('no query or postTransform');
     }
-    if (customOptions && customOptions.uid) {
+    if (context && customOptions && customOptions.uid) {
       context.uid = customOptions.uid;
     }
 
