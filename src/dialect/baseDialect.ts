@@ -65,6 +65,10 @@ export abstract class SQLDialect {
     return ('' + bool).toUpperCase();
   }
 
+  public floatDivision(numerator: string, denominator: string): string {
+      return `(${numerator}/${denominator})`;
+    }
+
   public numberOrTimeToSQL(x: number | Date): string {
     if (x === null) return this.nullConstant();
     if ((x as Date).toISOString) {

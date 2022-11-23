@@ -88,6 +88,10 @@ export class DruidDialect extends SQLDialect {
       .replace(/\.000$/, '');
   }
 
+  public floatDivision(numerator: string, denominator: string): string {
+    return `(${numerator}*1.0/${denominator})`;
+  }
+
   public constantGroupBy(): string {
     return "GROUP BY ''";
   }

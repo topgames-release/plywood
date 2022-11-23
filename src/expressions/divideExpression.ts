@@ -42,7 +42,7 @@ export class DivideExpression extends ChainableUnaryExpression {
   }
 
   protected _getSQLChainableUnaryHelper(dialect: SQLDialect, operandSQL: string, expressionSQL: string): string {
-    return `(CASE WHEN ${operandSQL} = '0' THEN 0 CASE WHEN ${expressionSQL} = '0' THEN ${Number.MAX_SAFE_INTEGER} ELSE (${operandSQL}/${expressionSQL}) END)`;
+    return dialect.floatDivision(operandSQL, expressionSQL);
   }
 
   protected specialSimplify(): Expression {
