@@ -169,5 +169,9 @@ export class DruidDialect extends SQLDialect {
     return `POSITION(${substr} IN ${str}) - 1`;
   }
 
+  public lookupExpression(base: string, lookup: string): string {
+    return `LOOKUP(${base}, ${this.escapeLiteral(lookup)})`;
+  }
+
 }
 

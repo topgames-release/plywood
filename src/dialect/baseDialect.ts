@@ -155,6 +155,10 @@ export abstract class SQLDialect {
     return `CHAR_LENGTH(${a})`;
   }
 
+  public lookupExpression(_base: string, _lookup: string): string {
+    throw new Error('can not express a lookup as a function');
+  }
+
   public abstract timeFloorExpression(operand: string, duration: Duration, timezone: Timezone): string
 
   public abstract timeBucketExpression(operand: string, duration: Duration, timezone: Timezone): string
