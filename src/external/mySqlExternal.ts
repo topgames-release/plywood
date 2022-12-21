@@ -45,10 +45,11 @@ export class MySQLExternal extends SQLExternal {
       let nativeType = column.Type.toLowerCase();
       if (nativeType === "datetime" || nativeType === "timestamp") {
         type = 'TIME';
-      } else if (nativeType.indexOf("varchar(") === 0 || nativeType.indexOf("blob") === 0) {
+      } else if (nativeType.indexOf("varchar(") === 0 || nativeType === 'text' || nativeType.indexOf("blob") === 0) {
         type = 'STRING';
       } else if (
         nativeType.indexOf("int(") === 0 ||
+        nativeType === "int" ||
         nativeType.indexOf("bigint(") === 0 ||
         nativeType.indexOf("decimal(") === 0 ||
         nativeType.indexOf("float") === 0 ||
