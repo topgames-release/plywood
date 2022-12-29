@@ -25,7 +25,9 @@ export class MySQLDialect extends SQLDialect {
     "PT1M": "%Y-%m-%d %H:%i:00Z",
     "PT1H": "%Y-%m-%d %H:00:00Z",
     "P1D":  "%Y-%m-%d 00:00:00Z",
+    "P1W":  "%Y-%m-%d 00:00:00Z",
     "P1M":  "%Y-%m-01 00:00:00Z",
+    "P3M":  "%Y-%m-01 00:00:00Z",
     "P1Y":  "%Y-01-01 00:00:00Z"
   };
 
@@ -120,7 +122,15 @@ export class MySQLDialect extends SQLDialect {
   }
 
   public timeFloorExpression(operand: string, duration: Duration, timezone: Timezone): string {
-    let bucketFormat = MySQLDialect.TIME_BUCKETING[duration.toString()];
+    let timeBucketing = duration.toString()
+    if(duration.toString() === 'P1W'){
+      return `DATE_FORMAT(DATE_SUB(${operand}, INTERVAL DAYOFWEEK(${operand}) - 1 DAY),"${MySQLDialect.TIME_BUCKETING[timeBucketing]}")`
+    }
+    if(duration.toString() === 'P3M'){
+      return `DATE_FORMAT(DATE_ADD(CONCAT(YEAR(${operand}),'-01-01'), INTERVAL QUARTER(${operand}) - 1 QUARTER),"${MySQLDialect.TIME_BUCKETING[timeBucketing]}")`
+    }
+    // DATE_FORMAT(DATE_SUB(started_date, INTERVAL DAYOFWEEK(started_date) - 1 DAY),"%Y-%m-%d")
+    let bucketFormat = MySQLDialect.TIME_BUCKETING[timeBucketing];
     if (!bucketFormat) throw new Error(`unsupported duration '${duration}'`);
     return this.walltimeToUTC(`DATE_FORMAT(${this.utcToWalltime(operand, timezone)},'${bucketFormat}')`, timezone);
   }
