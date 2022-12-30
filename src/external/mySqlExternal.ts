@@ -43,22 +43,23 @@ export class MySQLExternal extends SQLExternal {
       let name = column.Field;
       let type: PlyType;
       let nativeType = column.Type.toLowerCase();
-      if (nativeType === "datetime" || nativeType === "timestamp") {
+      if (nativeType === "datetime" || nativeType === "timestamp" || nativeType === 'date') {
         type = 'TIME';
-      } else if (nativeType.indexOf("varchar(") === 0 || nativeType === 'text' || nativeType.indexOf("blob") === 0) {
+      } else if (nativeType.indexOf("varchar(") === 0 || nativeType.indexOf("enum") === 0 || nativeType === 'text' || nativeType.indexOf("blob") === 0) {
         type = 'STRING';
+      } else if (nativeType.indexOf("tinyint(1)") === 0) {
+        type = 'BOOLEAN';
       } else if (
         nativeType.indexOf("int(") === 0 ||
         nativeType === "int" ||
         nativeType.indexOf("bigint(") === 0 ||
         nativeType.indexOf("decimal(") === 0 ||
         nativeType.indexOf("float") === 0 ||
-        nativeType.indexOf("double") === 0
+        nativeType.indexOf("double") === 0 ||
+        nativeType.indexOf("tinyint(") === 0
       ) {
         type = 'NUMBER';
-      } else if (nativeType.indexOf("tinyint(1)") === 0) {
-        type = 'BOOLEAN';
-      } else {
+      }  else {
         return null;
       }
       return new AttributeInfo({
