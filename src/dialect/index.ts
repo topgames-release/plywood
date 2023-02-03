@@ -16,5 +16,6 @@
 
 export * from './baseDialect';
 export * from './mySqlDialect';
+export * from './clickHouseDialect';
 export * from './postgresDialect';
 export * from './druidDialect';

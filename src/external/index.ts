@@ -17,6 +17,7 @@
 export * from './baseExternal';
 export * from './sqlExternal';
 export * from './mySqlExternal';
+export * from './clickHouseExternal';
 export * from './postgresExternal';
 export * from './utils/druidTypes';
 export * from './druidExternal';

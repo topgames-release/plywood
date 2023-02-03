@@ -17,6 +17,7 @@ cat \
   build/helper/utils.js \
   build/dialect/baseDialect.js \
   build/dialect/mySqlDialect.js \
+  build/dialect/clickHouseDialect.js \
   build/dialect/postgresDialect.js \
   build/dialect/druidDialect.js \
   build/datatypes/common.js \
@@ -100,6 +101,7 @@ cat \
   build/external/utils/druidAggregationBuilder.js \
   build/external/sqlExternal.js \
   build/external/mySqlExternal.js \
+  build/external/clickHouseExternal.js \
   build/external/postgresExternal.js \
   build/external/druidSqlExternal.js \
   build/external/druidExternal.js \
