@@ -205,6 +205,10 @@ export class SplitExpression extends ChainableExpression implements Aggregate {
     return Object.keys(this.splits).map((d, i) => String(i + 1));
   }
 
+  public getGroupByNameSQL(dialect: SQLDialect): string[]{
+    return this.mapSplits((name) => dialect.escapeName(name));
+  }
+
   public fullyDefined(): boolean {
     return this.operand.isOp('literal') && this.mapSplits((name, expression) => expression.resolved()).every(Boolean);
   }

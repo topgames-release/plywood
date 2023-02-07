@@ -171,7 +171,7 @@ export abstract class SQLExternal extends External {
             .concat(applies.map(apply => apply.getSQL(dialect)))
             .join(',\n'),
           from,
-          'GROUP BY ' + (this.capability('shortcut-group-by') ? split.getShortGroupBySQL() : split.getGroupBySQL(dialect)).join(',')
+          'GROUP BY ' + (this.capability('shortcut-group-by') ? split.getShortGroupBySQL() : this.capability('string-group-by') ? split.getGroupByNameSQL(dialect): split.getGroupBySQL(dialect)).join(',')
         );
         if (!(this.havingFilter.equals(Expression.TRUE))) {
           query.push('HAVING ' + this.havingFilter.getSQL(dialect));

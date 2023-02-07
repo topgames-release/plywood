@@ -25,20 +25,22 @@ export class ClickHouseExternal extends SQLExternal {
       let name = column.name;
       let type: PlyType;
       let nativeType = column.type.toLowerCase();
-      if (nativeType === "datetime" || nativeType === "timestamp" || nativeType === 'date') {
+      if (nativeType.indexOf("datetime") === 0 || nativeType.indexOf('date') === 0 ) {
         type = 'TIME';
-      } else if (nativeType.indexOf("fixedstring(") === 0 || nativeType.indexOf("enum") === 0 || nativeType === 'string' || nativeType === 'text' || nativeType.indexOf("blob") === 0) {
+      } else if (
+        nativeType.indexOf("string") === 0 || 
+        nativeType.indexOf("fixedstring") === 0 || 
+        nativeType.indexOf("enum") === 0 ||
+        nativeType.indexOf("uuid") === 0
+      ) {
         type = 'STRING';
-      } else if (nativeType.indexOf("tinyint(1)") === 0) {
+      } else if (nativeType.indexOf("bool") === 0) {
         type = 'BOOLEAN';
       } else if (
-        nativeType.indexOf("int(") === 0 ||
         nativeType.indexOf("int") === 0 ||
-        nativeType.indexOf("bigint(") === 0 ||
-        nativeType.indexOf("decimal(") === 0 ||
-        nativeType.indexOf("float") === 0 ||
-        nativeType.indexOf("double") === 0 ||
-        nativeType.indexOf("tinyint(") === 0
+        nativeType.indexOf("uint") === 0 ||
+        nativeType.indexOf("decimal") === 0 ||
+        nativeType.indexOf("float") === 0 
       ) {
         type = 'NUMBER';
       }  else {
@@ -64,7 +66,7 @@ export class ClickHouseExternal extends SQLExternal {
   }
 
   static getVersion(requester: PlywoodRequester<any>): Promise<string> {
-    return toArray(requester({ query: 'SELECT @@version' }))
+    return toArray(requester({ query: 'SELECT version()' }))
       .then((res) => {
         if (!Array.isArray(res) || res.length !== 1) throw new Error('invalid version response');
         let key = Object.keys(res[0])[0];
@@ -81,6 +83,12 @@ export class ClickHouseExternal extends SQLExternal {
   protected getIntrospectAttributes(): Promise<Attributes> {
     return toArray(this.requester({ query: `DESCRIBE ${this.dialect.escapeName(this.source as string)}` }))
       .then(ClickHouseExternal.postProcessIntrospect);
+  }
+
+  protected capability(cap: string): boolean {
+    if (cap === 'filter-on-attribute' || cap === 'shortcut-group-by') return false;
+    if (cap === 'string-group-by') return true
+    return super.capability(cap);
   }
 }
 

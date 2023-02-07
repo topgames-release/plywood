@@ -81,7 +81,7 @@ export class ClickHouseDialect extends SQLDialect {
 
   public escapeLiteral(name: string): string {
     if (name === null) return this.nullConstant();
-    return JSON.stringify(name);
+    return JSON.stringify(name).replace(/\"/g, '\'');
   }
 
   public timeToSQL(date: Date): string {
@@ -98,7 +98,7 @@ export class ClickHouseDialect extends SQLDialect {
   }
 
   public isNotDistinctFromExpression(a: string, b: string): string {
-    return `(${a}<=>${b})`;
+    return `(${a}=${b})`;
   }
 
   public castExpression(inputType: PlyType, operand: string, cast: string): string {
@@ -109,25 +109,20 @@ export class ClickHouseDialect extends SQLDialect {
 
   public utcToWalltime(operand: string, timezone: Timezone): string {
     if (timezone.isUTC()) return operand;
-    return `toTimeZone(toDateTime(${operand}, '+0:00'), '${timezone}')`;
+    return `toDateTime(${operand}), '${timezone}')`;
   }
 
   public walltimeToUTC(operand: string, timezone: Timezone): string {
     if (timezone.isUTC()) return operand;
-    return `toTimeZone(toDateTime(${operand}, '${timezone}'), '+0:00')`;
+    return `toDateTime(${operand}, '${timezone}')`;
   }
 
   public timeFloorExpression(operand: string, duration: Duration, timezone: Timezone): string {
     let timeBucketing = duration.toString()
     let bucketFormat = ClickHouseDialect.TIME_BUCKETING[timeBucketing];
-    let dateTimeFn = ClickHouseDialect.DATE_TIME_FN[timeBucketing]
-    if(timeBucketing === 'P1W'){
-      dateTimeFn += `(${this.utcToWalltime(operand, timezone)})`
-    }else{
-      dateTimeFn += `(${this.utcToWalltime(operand, timezone)})`
-    }
+    let dateTimeFn = `${ClickHouseDialect.DATE_TIME_FN[timeBucketing]}(${this.utcToWalltime(operand, timezone)})`
     if (!bucketFormat) throw new Error(`unsupported duration '${duration}'`);
-    return this.walltimeToUTC(`toDateTime(formatDateTime(${dateTimeFn},'${bucketFormat}'), '${timezone}')`, timezone);
+    return this.walltimeToUTC(`toDateTime(formatDateTime(${dateTimeFn},'${bucketFormat}'))`, timezone);
   }
 
   public timeBucketExpression(operand: string, duration: Duration, timezone: Timezone): string {
