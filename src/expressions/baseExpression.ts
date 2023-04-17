@@ -109,6 +109,8 @@ export interface ComputeOptions extends Environment {
   maxRows?: number;
   maxComputeCycles?: number;
   concurrentQueryLimit?: number;
+  beforePerSplitRequestFn?: (external:External) => void;
+  afterSplitRequestFn?: (queriesMade: number, ) => void;
 }
 
 export interface AlterationFillerPromise {
@@ -1856,7 +1858,9 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
       maxComputeCycles = 5,
       maxQueries = 500,
       maxRows,
-      concurrentQueryLimit = Infinity
+      concurrentQueryLimit = Infinity,
+      beforePerSplitRequestFn = function(){},
+      afterSplitRequestFn = function(){},
     } = options;
 
     let ex: Expression = this;
@@ -1870,6 +1874,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
         const readyExternalsFilled = await fillExpressionExternalAlterationAsync(readyExternals, (external, terminal) => {
           if (queriesMade < maxQueries) {
             queriesMade++;
+            beforePerSplitRequestFn(external);
             // todo: 3
             return external.queryValue(terminal, rawQueries, customOptions);
           } else {
@@ -1878,6 +1883,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
           }
         });
 
+        afterSplitRequestFn(queriesMade);
         ex = ex.applyReadyExternals(readyExternalsFilled);
         const literalValue = ex.getLiteralValue();
         if (maxRows && literalValue instanceof Dataset) {
