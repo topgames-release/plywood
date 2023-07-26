@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-import { Datum, PlywoodValue } from '../datatypes/index';
-import { ComputeOptions, Expression } from '../expressions/baseExpression';
+import { Datum, PlywoodValue } from "../datatypes/index";
+import { ComputeOptions, Expression } from "../expressions/baseExpression";
 
 export interface Executor {
   (ex: Expression, opt?: ComputeOptions): Promise<PlywoodValue>;
@@ -24,12 +24,20 @@ export interface Executor {
 
 export interface BasicExecutorParameters {
   datasets: Datum;
+  dataCubeName: string;
 }
 
-export function basicExecutorFactory(parameters: BasicExecutorParameters): Executor {
+export function basicExecutorFactory(
+  parameters: BasicExecutorParameters
+): Executor {
   let datasets = parameters.datasets;
+  let dataCubeName = parameters.dataCubeName;
   return (ex: Expression, opt: ComputeOptions = {}) => {
-    // todo: 1
+    if (!opt.customOptions) {
+      opt.customOptions = {};
+    }
+    opt.customOptions.dataCubeName = dataCubeName;
+
     return ex.compute(datasets, opt);
   };
 }
