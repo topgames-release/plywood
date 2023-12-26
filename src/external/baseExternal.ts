@@ -745,6 +745,10 @@ export abstract class External {
     if (typeof query === "object") {
       query.source = "TopBI";
       query.subSource = customOptions.dataCubeName;
+
+      if (customOptions.hash) {
+        query.hash = customOptions.hash;
+      }
     }
 
     if (next) {
