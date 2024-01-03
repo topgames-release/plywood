@@ -1,6 +1,6 @@
 {
   "name": "@topgames/plywood",
-  "version": "0.21.2-bi.17.4",
+  "version": "0.21.2-bi.17.5",
   "description": "A query planner and executor",
   "keywords": [
     "split",
@@ -39,7 +39,7 @@
     "has-own-prop": "^1.0.1",
     "immutable-class": "^0.9.4",
     "moment-timezone": "^0.5.26",
-    "plywood-base-api": "^0.2.8",
+    "@topgames/plywood-base-api": "0.2.8-bi.1",
     "readable-stream": "^3.0.3",
     "stream-to-array": "^2.3.0",
     "tslib": "^1.10.0"

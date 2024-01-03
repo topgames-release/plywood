@@ -22,7 +22,7 @@ import {
   NamedArray,
   SimpleArray,
 } from "immutable-class";
-import { PlywoodRequester } from "plywood-base-api";
+import { PlywoodRequester } from "@topgames/plywood-base-api";
 import {
   ReadableStream,
   Transform,
@@ -745,10 +745,6 @@ export abstract class External {
     if (typeof query === "object") {
       query.source = "TopBI";
       query.subSource = customOptions.dataCubeName;
-
-      if (customOptions.hash) {
-        query.hash = customOptions.hash;
-      }
     }
 
     if (next) {
@@ -774,7 +770,10 @@ export abstract class External {
       return pipeWithError(resultStream, postTransform);
     } else {
       if (rawQueries) rawQueries.push({ engine, query });
-      return pipeWithError(requester({ query, context }), postTransform);
+      return pipeWithError(
+        requester({ query, context, customOptions }),
+        postTransform
+      );
     }
   }
 

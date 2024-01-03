@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-import { DatabaseRequest, PlywoodRequester } from 'plywood-base-api';
-import { PassThrough } from 'readable-stream';
-import { pipeWithError } from './utils';
+import { DatabaseRequest, PlywoodRequester } from "@topgames/plywood-base-api";
+import { PassThrough } from "readable-stream";
+import { pipeWithError } from "./utils";
 
 export interface ConcurrentLimitRequesterParameters<T> {
   requester: PlywoodRequester<T>;
@@ -29,11 +29,14 @@ interface QueueItem<T> {
   stream: PassThrough;
 }
 
-export function concurrentLimitRequesterFactory<T>(parameters: ConcurrentLimitRequesterParameters<T>): PlywoodRequester<T> {
+export function concurrentLimitRequesterFactory<T>(
+  parameters: ConcurrentLimitRequesterParameters<T>
+): PlywoodRequester<T> {
   let requester = parameters.requester;
   let concurrentLimit = parameters.concurrentLimit || 5;
 
-  if (typeof concurrentLimit !== "number") throw new TypeError("concurrentLimit should be a number");
+  if (typeof concurrentLimit !== "number")
+    throw new TypeError("concurrentLimit should be a number");
 
   let requestQueue: QueueItem<T>[] = [];
   let outstandingRequests: int = 0;
@@ -45,8 +48,8 @@ export function concurrentLimitRequesterFactory<T>(parameters: ConcurrentLimitRe
     outstandingRequests++;
 
     const stream = requester(queueItem.request);
-    stream.on('error', requestFinished);
-    stream.on('end', requestFinished);
+    stream.on("error", requestFinished);
+    stream.on("end", requestFinished);
     pipeWithError(stream, queueItem.stream);
   }
 
@@ -54,14 +57,14 @@ export function concurrentLimitRequesterFactory<T>(parameters: ConcurrentLimitRe
     if (outstandingRequests < concurrentLimit) {
       outstandingRequests++;
       const stream = requester(request);
-      stream.on('error', requestFinished);
-      stream.on('end', requestFinished);
+      stream.on("error", requestFinished);
+      stream.on("end", requestFinished);
       return stream;
     } else {
       const stream = new PassThrough({ objectMode: true });
       requestQueue.push({
         request,
-        stream
+        stream,
       });
       return stream;
     }
