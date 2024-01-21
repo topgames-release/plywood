@@ -40,15 +40,33 @@ export function concurrentLimitRequesterFactory<T>(
 
   let requestQueue: QueueItem<T>[] = [];
   let outstandingRequests: int = 0;
+  let isErrorOccurred: boolean = false;
 
   function requestFinished(): void {
     outstandingRequests--;
-    if (!(requestQueue.length && outstandingRequests < concurrentLimit)) return;
+    if (
+      isErrorOccurred ||
+      !(requestQueue.length && outstandingRequests < concurrentLimit)
+    ) {
+      // If an error has occurred or no more requests are pending, return
+      return;
+    }
+
     let queueItem = requestQueue.shift();
     outstandingRequests++;
 
     const stream = requester(queueItem.request);
-    stream.on("error", requestFinished);
+    // stream.on("error", requestFinished);
+    stream.on("error", (error) => {
+      outstandingRequests--;
+      isErrorOccurred = true;
+      requestQueue.forEach((item) => {
+        item.stream.end();
+      });
+      requestQueue = [];
+      queueItem.stream.emit("error", error);
+      isErrorOccurred = false;
+    });
     stream.on("end", requestFinished);
     pipeWithError(stream, queueItem.stream);
   }
@@ -57,7 +75,16 @@ export function concurrentLimitRequesterFactory<T>(
     if (outstandingRequests < concurrentLimit) {
       outstandingRequests++;
       const stream = requester(request);
-      stream.on("error", requestFinished);
+      // stream.on("error", requestFinished);
+      stream.on("error", (error) => {
+        outstandingRequests--;
+        isErrorOccurred = true;
+        requestQueue.forEach((item) => {
+          item.stream.end();
+        });
+        requestQueue = [];
+        isErrorOccurred = false;
+      });
       stream.on("end", requestFinished);
       return stream;
     } else {
