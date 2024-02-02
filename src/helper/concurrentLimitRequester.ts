@@ -69,6 +69,7 @@ export function concurrentLimitRequesterFactory<T>(
 
       if (elapsedTime > 4 * 60 * 1000) {
         // If the request took more than 4 minutes, clear the queue and return an error
+        console.error("NodeJS Query timeout");
         clearQueueAndError(queueItem.stream);
       } else {
         requestFinished();
