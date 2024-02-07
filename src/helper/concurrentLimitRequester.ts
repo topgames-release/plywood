@@ -17,7 +17,7 @@
 
 import { DatabaseRequest, PlywoodRequester } from "@topgames/plywood-base-api";
 import { PassThrough } from "readable-stream";
-import { pipeWithError } from "./utils";
+import { formatDateTimeForLog, pipeWithError } from "./utils";
 
 export interface ConcurrentLimitRequesterParameters<T> {
   requester: PlywoodRequester<T>;
@@ -69,7 +69,7 @@ export function concurrentLimitRequesterFactory<T>(
 
       if (elapsedTime > 4 * 60 * 1000) {
         // If the request took more than 4 minutes, clear the queue and return an error
-        console.log("NodeJS Query timeout");
+        console.log(`${formatDateTimeForLog(new Date())} NodeJS Query timeout`);
         clearQueueAndError(queueItem.stream);
       } else {
         requestFinished();

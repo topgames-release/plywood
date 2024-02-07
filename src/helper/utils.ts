@@ -14,19 +14,25 @@
  * limitations under the License.
  */
 
-import * as hasOwnProp from 'has-own-prop';
-import { ReadableStream, WritableStream } from 'readable-stream';
+import * as hasOwnProp from "has-own-prop";
+import { ReadableStream, WritableStream } from "readable-stream";
 
 export function repeat(str: string, times: int): string {
   return new Array(times + 1).join(str);
 }
 
 export function indentBy(str: string, indent: int): string {
-  const spaces = repeat(' ', indent);
-  return str.split('\n').map((x) => spaces + x).join('\n');
+  const spaces = repeat(" ", indent);
+  return str
+    .split("\n")
+    .map((x) => spaces + x)
+    .join("\n");
 }
 
-export function dictEqual(dictA: Record<string, any>, dictB: Record<string, any>): boolean {
+export function dictEqual(
+  dictA: Record<string, any>,
+  dictB: Record<string, any>
+): boolean {
   if (dictA === dictB) return true;
   if (!dictA !== !dictB) return false;
   let keys = Object.keys(dictA);
@@ -56,7 +62,10 @@ export function deduplicateSort(a: string[]): string[] {
   return newA;
 }
 
-export function mapLookup<T, U>(thing: Record<string, T>, fn: (x: T) => U): Record<string, U> {
+export function mapLookup<T, U>(
+  thing: Record<string, T>,
+  fn: (x: T) => U
+): Record<string, U> {
   let newThing: Record<string, U> = Object.create(null);
   for (let k in thing) {
     if (hasOwnProp(thing, k)) newThing[k] = fn(thing[k]);
@@ -91,25 +100,33 @@ export function safeAdd(num: number, delta: number): number {
   }
 }
 
-export function safeRange(num: number, delta: number): { start: number, end: number } {
+export function safeRange(
+  num: number,
+  delta: number
+): { start: number; end: number } {
   let stringDelta = String(delta);
   let dotIndex = stringDelta.indexOf(".");
   if (dotIndex === -1 || stringDelta.length === 18) {
     return {
       start: num,
-      end: num + delta
+      end: num + delta,
     };
   } else {
     let scale = Math.pow(10, stringDelta.length - dotIndex - 1);
     num = clip(num * scale) / scale;
     return {
       start: num,
-      end: (num * scale + delta * scale) / scale
+      end: (num * scale + delta * scale) / scale,
     };
   }
 }
 
-export function continuousFloorExpression(variable: string, floorFn: string, size: number, offset: number): string {
+export function continuousFloorExpression(
+  variable: string,
+  floorFn: string,
+  size: number,
+  offset: number
+): string {
   let expr = variable;
   if (offset !== 0) {
     expr = expr + " - " + offset;
@@ -138,7 +155,7 @@ export class ExtendableError extends Error {
     super(message);
     this.name = (this.constructor as any).name;
     this.message = message;
-    if (typeof (Error as any).captureStackTrace === 'function') {
+    if (typeof (Error as any).captureStackTrace === "function") {
       (Error as any).captureStackTrace(this, this.constructor);
     } else {
       this.stack = (new Error(message) as any).stack;
@@ -147,11 +164,26 @@ export class ExtendableError extends Error {
 }
 
 export function pluralIfNeeded(n: number, thing: string): string {
-  return `${n} ${thing}${n === 1 ? '' : 's'}`;
+  return `${n} ${thing}${n === 1 ? "" : "s"}`;
 }
 
 export function pipeWithError(src: ReadableStream, dest: WritableStream): any {
   src.pipe(dest);
-  src.on('error', (e: Error) => dest.emit('error', e));
+  src.on("error", (e: Error) => dest.emit("error", e));
   return dest;
+}
+
+export function formatDateTimeForLog(date: Date) {
+  // 获取年、月、日、时、分、秒
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0"); // 月份从0开始，需要加1
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  // 拼接成格式化的字符串
+  const formattedDateTime = `${year}/${month}/${day}-${hours}:${minutes}:${seconds}`;
+
+  return formattedDateTime;
 }
