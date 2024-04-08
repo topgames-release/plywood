@@ -15,12 +15,20 @@
  * limitations under the License.
  */
 
-import { Duration, parseISODate, Timezone } from '@topgames/chronoshift';
-import * as hasOwnProp from 'has-own-prop';
-import { Instance, isImmutableClass, generalLookupsEqual } from 'immutable-class';
-import { PassThrough } from 'readable-stream';
+import { Duration, parseISODate, Timezone } from "@topgames/chronoshift";
+import * as hasOwnProp from "has-own-prop";
+import {
+  Instance,
+  isImmutableClass,
+  generalLookupsEqual,
+} from "immutable-class";
+import { PassThrough } from "readable-stream";
 
-import { failIfIntrospectNeededInDatum, getFullTypeFromDatum, introspectDatum } from '../datatypes/common';
+import {
+  failIfIntrospectNeededInDatum,
+  getFullTypeFromDatum,
+  introspectDatum,
+} from "../datatypes/common";
 import {
   ComputeFn,
   Dataset,
@@ -33,74 +41,85 @@ import {
   Range,
   Set,
   StringRange,
-  TimeRange
-} from '../datatypes/index';
-import { iteratorFactory, PlyBit } from '../datatypes/valueStream';
+  TimeRange,
+} from "../datatypes/index";
+import { iteratorFactory, PlyBit } from "../datatypes/valueStream";
 
-import { SQLDialect } from '../dialect/baseDialect';
-import { External, ExternalJS } from '../external/baseExternal';
-import { promiseWhile } from '../helper/promiseWhile';
-import { deduplicateSort, pipeWithError, repeat, shallowCopy } from '../helper/utils';
-import { DatasetFullType, Environment, PlyType, PlyTypeSimple, PlyTypeSingleValue } from '../types';
+import { SQLDialect } from "../dialect/baseDialect";
+import { External, ExternalJS } from "../external/baseExternal";
+import { promiseWhile } from "../helper/promiseWhile";
+import {
+  deduplicateSort,
+  pipeWithError,
+  repeat,
+  shallowCopy,
+} from "../helper/utils";
+import {
+  DatasetFullType,
+  Environment,
+  PlyType,
+  PlyTypeSimple,
+  PlyTypeSingleValue,
+} from "../types";
 
-import { AbsoluteExpression } from './absoluteExpression';
-import { AddExpression } from './addExpression';
-import { AndExpression } from './andExpression';
-import { ApplyExpression } from './applyExpression';
-import { AverageExpression } from './averageExpression';
-import { BitwiseAndExpression } from './bitwiseAndExpression';
-import { CardinalityExpression } from './cardinalityExpression';
-import { CastExpression } from './castExpression';
-import { CollectExpression } from './collectExpression';
-import { ConcatExpression } from './concatExpression';
-import { ContainsExpression } from './containsExpression';
-import { CountDistinctExpression } from './countDistinctExpression';
-import { CountExpression } from './countExpression';
-import { CustomAggregateExpression } from './customAggregateExpression';
-import { CustomTransformExpression } from './customTransformExpression';
-import { DivideExpression } from './divideExpression';
-import { ExternalExpression } from './externalExpression';
-import { ExtractExpression } from './extractExpression';
-import { FallbackExpression } from './fallbackExpression';
-import { FilterExpression } from './filterExpression';
-import { GreaterThanExpression } from './greaterThanExpression';
-import { GreaterThanOrEqualExpression } from './greaterThanOrEqualExpression';
-import { IndexOfExpression } from './indexOfExpression';
-import { InExpression } from './inExpression';
-import { IsExpression } from './isExpression';
-import { JoinExpression } from './joinExpression';
-import { LengthExpression } from './lengthExpression';
-import { LessThanExpression } from './lessThanExpression';
-import { LessThanOrEqualExpression } from './lessThanOrEqualExpression';
-import { LimitExpression } from './limitExpression';
-import { LiteralExpression } from './literalExpression';
-import { LookupExpression } from './lookupExpression';
-import { MatchExpression } from './matchExpression';
-import { MaxExpression } from './maxExpression';
-import { MinExpression } from './minExpression';
-import { ModExpression } from './modExpression';
-import { MultiplyExpression } from './multiplyExpression';
-import { NotExpression } from './notExpression';
-import { NumberBucketExpression } from './numberBucketExpression';
-import { OrExpression } from './orExpression';
-import { OverlapExpression } from './overlapExpression';
-import { PowerExpression } from './powerExpression';
-import { LogExpression } from './logExpression';
-import { QuantileExpression } from './quantileExpression';
-import { RefExpression } from './refExpression';
-import { SelectExpression } from './selectExpression';
-import { Direction, SortExpression } from './sortExpression';
-import { SplitExpression } from './splitExpression';
-import { SubstrExpression } from './substrExpression';
-import { SubtractExpression } from './subtractExpression';
-import { SumExpression } from './sumExpression';
-import { ThenExpression } from './thenExpression';
-import { TimeBucketExpression } from './timeBucketExpression';
-import { TimeFloorExpression } from './timeFloorExpression';
-import { TimePartExpression } from './timePartExpression';
-import { TimeRangeExpression } from './timeRangeExpression';
-import { TimeShiftExpression } from './timeShiftExpression';
-import { TransformCaseExpression } from './transformCaseExpression';
+import { AbsoluteExpression } from "./absoluteExpression";
+import { AddExpression } from "./addExpression";
+import { AndExpression } from "./andExpression";
+import { ApplyExpression } from "./applyExpression";
+import { AverageExpression } from "./averageExpression";
+import { BitwiseAndExpression } from "./bitwiseAndExpression";
+import { CardinalityExpression } from "./cardinalityExpression";
+import { CastExpression } from "./castExpression";
+import { CollectExpression } from "./collectExpression";
+import { ConcatExpression } from "./concatExpression";
+import { ContainsExpression } from "./containsExpression";
+import { CountDistinctExpression } from "./countDistinctExpression";
+import { CountExpression } from "./countExpression";
+import { CustomAggregateExpression } from "./customAggregateExpression";
+import { CustomTransformExpression } from "./customTransformExpression";
+import { DivideExpression } from "./divideExpression";
+import { ExternalExpression } from "./externalExpression";
+import { ExtractExpression } from "./extractExpression";
+import { FallbackExpression } from "./fallbackExpression";
+import { FilterExpression } from "./filterExpression";
+import { GreaterThanExpression } from "./greaterThanExpression";
+import { GreaterThanOrEqualExpression } from "./greaterThanOrEqualExpression";
+import { IndexOfExpression } from "./indexOfExpression";
+import { InExpression } from "./inExpression";
+import { IsExpression } from "./isExpression";
+import { JoinExpression } from "./joinExpression";
+import { LengthExpression } from "./lengthExpression";
+import { LessThanExpression } from "./lessThanExpression";
+import { LessThanOrEqualExpression } from "./lessThanOrEqualExpression";
+import { LimitExpression } from "./limitExpression";
+import { LiteralExpression } from "./literalExpression";
+import { LookupExpression } from "./lookupExpression";
+import { MatchExpression } from "./matchExpression";
+import { MaxExpression } from "./maxExpression";
+import { MinExpression } from "./minExpression";
+import { ModExpression } from "./modExpression";
+import { MultiplyExpression } from "./multiplyExpression";
+import { NotExpression } from "./notExpression";
+import { NumberBucketExpression } from "./numberBucketExpression";
+import { OrExpression } from "./orExpression";
+import { OverlapExpression } from "./overlapExpression";
+import { PowerExpression } from "./powerExpression";
+import { LogExpression } from "./logExpression";
+import { QuantileExpression } from "./quantileExpression";
+import { RefExpression } from "./refExpression";
+import { SelectExpression } from "./selectExpression";
+import { Direction, SortExpression } from "./sortExpression";
+import { SplitExpression } from "./splitExpression";
+import { SubstrExpression } from "./substrExpression";
+import { SubtractExpression } from "./subtractExpression";
+import { SumExpression } from "./sumExpression";
+import { ThenExpression } from "./thenExpression";
+import { TimeBucketExpression } from "./timeBucketExpression";
+import { TimeFloorExpression } from "./timeFloorExpression";
+import { TimePartExpression } from "./timePartExpression";
+import { TimeRangeExpression } from "./timeRangeExpression";
+import { TimeShiftExpression } from "./timeShiftExpression";
+import { TransformCaseExpression } from "./transformCaseExpression";
 
 export interface ComputeOptions extends Environment {
   customOptions?: any;
@@ -109,15 +128,18 @@ export interface ComputeOptions extends Environment {
   maxRows?: number;
   maxComputeCycles?: number;
   concurrentQueryLimit?: number;
-  beforePerSplitRequestFn?: (external:External) => void;
-  afterSplitRequestFn?: (queriesMade: number, ) => void;
+  beforePerSplitRequestFn?: (external: External) => void;
+  afterSplitRequestFn?: (queriesMade: number) => void;
 }
 
 export interface AlterationFillerPromise {
   (external: External, terminal: boolean): Promise<any>;
 }
 
-function fillExpressionExternalAlterationAsync(alteration: ExpressionExternalAlteration, filler: AlterationFillerPromise): Promise<ExpressionExternalAlteration> {
+function fillExpressionExternalAlterationAsync(
+  alteration: ExpressionExternalAlteration,
+  filler: AlterationFillerPromise
+): Promise<ExpressionExternalAlteration> {
   let tasks: Promise<any>[] = [];
   fillExpressionExternalAlteration(alteration, (external, terminal) => {
     tasks.push(filler(external, terminal));
@@ -135,14 +157,16 @@ function fillExpressionExternalAlterationAsync(alteration: ExpressionExternalAlt
   });
 }
 
-
 export interface ExpressionExternalAlterationSimple {
   external: External;
   terminal?: boolean;
   result?: any;
 }
 
-export type ExpressionExternalAlteration = Record<string, ExpressionExternalAlterationSimple | DatasetExternalAlterations>;
+export type ExpressionExternalAlteration = Record<
+  string,
+  ExpressionExternalAlterationSimple | DatasetExternalAlterations
+>;
 
 export interface BooleanExpressionIterator {
   (ex: Expression, index: int, depth: int, nestDiff: int): boolean | null;
@@ -153,7 +177,13 @@ export interface VoidExpressionIterator {
 }
 
 export interface SubstitutionFn {
-  (ex: Expression, index: int, depth: int, nestDiff: int, typeContext: DatasetFullType): Expression | null;
+  (
+    ex: Expression,
+    index: int,
+    depth: int,
+    nestDiff: int,
+    typeContext: DatasetFullType
+  ): Expression | null;
 }
 
 export interface ExpressionMatchFn {
@@ -193,7 +223,7 @@ export interface SplitsJS {
   [name: string]: ExpressionJS;
 }
 
-export type CaseType = 'upperCase' | 'lowerCase';
+export type CaseType = "upperCase" | "lowerCase";
 
 export interface ExpressionValue {
   op?: string;
@@ -273,7 +303,7 @@ export interface ExtractAndRest {
 export type IfNotFound = "throw" | "leave" | "null";
 
 function runtimeAbstract() {
-  return new Error('must be implemented');
+  return new Error("must be implemented");
 }
 
 function getDataName(ex: Expression): string {
@@ -292,22 +322,22 @@ function getValue(param: any): any {
 }
 
 function getString(param: string | Expression): string {
-  if (typeof param === 'string') return param;
-  if (param instanceof LiteralExpression && param.type === 'STRING') {
+  if (typeof param === "string") return param;
+  if (param instanceof LiteralExpression && param.type === "STRING") {
     return param.value;
   }
   if (param instanceof RefExpression && param.nest === 0) {
     return param.name;
   }
-  throw new Error('could not extract a string out of ' + String(param));
+  throw new Error("could not extract a string out of " + String(param));
 }
 
 function getNumber(param: number | Expression): number {
-  if (typeof param === 'number') return param;
-  if (param instanceof LiteralExpression && param.type === 'NUMBER') {
+  if (typeof param === "number") return param;
+  if (param instanceof LiteralExpression && param.type === "NUMBER") {
     return param.value;
   }
-  throw new Error('could not extract a number out of ' + String(param));
+  throw new Error("could not extract a number out of " + String(param));
 }
 
 // -----------------------------
@@ -320,7 +350,7 @@ export function ply(dataset?: Dataset): LiteralExpression {
   if (!dataset) {
     dataset = new Dataset({
       keys: [],
-      data: [{}]
+      data: [{}],
     });
   }
   return r(dataset);
@@ -336,21 +366,23 @@ export function ply(dataset?: Dataset): LiteralExpression {
 export function $(name: string, nest?: number, type?: PlyType): RefExpression;
 export function $(name: string, type?: PlyType): RefExpression;
 export function $(name: string, nest?: any, type?: PlyType): RefExpression {
-  if (typeof name !== 'string') throw new TypeError('$() argument must be a string');
-  if (typeof nest === 'string') {
+  if (typeof name !== "string")
+    throw new TypeError("$() argument must be a string");
+  if (typeof nest === "string") {
     type = nest as PlyType;
     nest = 0;
   }
   return new RefExpression({
     name,
     nest: nest != null ? nest : 0,
-    type
+    type,
   });
 }
 
 export function i$(name: string, nest?: number, type?: PlyType): RefExpression {
-  if (typeof name !== 'string') throw new TypeError('$() argument must be a string');
-  if (typeof nest === 'string') {
+  if (typeof name !== "string")
+    throw new TypeError("$() argument must be a string");
+  if (typeof nest === "string") {
     type = nest as PlyType;
     nest = 0;
   }
@@ -359,22 +391,26 @@ export function i$(name: string, nest?: number, type?: PlyType): RefExpression {
     name,
     nest: nest != null ? nest : 0,
     type,
-    ignoreCase: true
+    ignoreCase: true,
   });
 }
 
-
 export function r(value: any): LiteralExpression {
-  if (value instanceof External) throw new TypeError('r() can not accept externals');
+  if (value instanceof External)
+    throw new TypeError("r() can not accept externals");
   if (Array.isArray(value)) value = Set.fromJS(value);
-  return LiteralExpression.fromJS({ op: 'literal', value: value });
+  return LiteralExpression.fromJS({ op: "literal", value: value });
 }
 
 export function toJS(thing: any): any {
-  return (thing && typeof thing.toJS === 'function') ? thing.toJS() : thing;
+  return thing && typeof thing.toJS === "function" ? thing.toJS() : thing;
 }
 
-function chainVia(op: string, expressions: Expression[], zero: Expression): Expression {
+function chainVia(
+  op: string,
+  expressions: Expression[],
+  zero: Expression
+): Expression {
   let n = expressions.length;
   if (!n) return zero;
   let acc = expressions[0];
@@ -400,7 +436,9 @@ export interface PEGParser {
  * Provides a way to express arithmetic operations, aggregations and database operators.
  * This class is the backbone of plywood
  */
-export abstract class Expression implements Instance<ExpressionValue, ExpressionJS> {
+export abstract class Expression
+  implements Instance<ExpressionValue, ExpressionJS>
+{
   static MAX_SAFE_INTEGER: LiteralExpression;
   static NULL: LiteralExpression;
   static ZERO: LiteralExpression;
@@ -416,12 +454,13 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   static plyqlParser: PEGParser;
   static defaultParserTimezone: Timezone = Timezone.UTC; // The default timezone within which dates in expressions are parsed
 
-
   static isExpression(candidate: any): candidate is Expression {
     return candidate instanceof Expression;
   }
 
-  static expressionLookupFromJS(expressionJSs: Record<string, ExpressionJS>): Record<string, Expression> {
+  static expressionLookupFromJS(
+    expressionJSs: Record<string, ExpressionJS>
+  ): Record<string, Expression> {
     let expressions: Record<string, Expression> = Object.create(null);
     for (let name in expressionJSs) {
       if (!hasOwnProp(expressionJSs, name)) continue;
@@ -430,7 +469,9 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return expressions;
   }
 
-  static expressionLookupToJS(expressions: Record<string, Expression>): Record<string, ExpressionJS> {
+  static expressionLookupToJS(
+    expressions: Record<string, Expression>
+  ): Record<string, ExpressionJS> {
     let expressionsJSs: Record<string, ExpressionJS> = {};
     for (let name in expressions) {
       if (!hasOwnProp(expressions, name)) continue;
@@ -445,7 +486,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param timezone The timezone within which to evaluate any untimezoned date strings
    */
   static parse(str: string, timezone?: Timezone): Expression {
-    if (str[0] === '{' && str[str.length - 1] === '}') {
+    if (str[0] === "{" && str[str.length - 1] === "}") {
       return Expression.fromJS(JSON.parse(str));
     }
 
@@ -487,10 +528,10 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     let expressionJS: ExpressionJS;
     // Quick parse simple expressions
     switch (typeof param) {
-      case 'undefined':
-        throw new Error('must have an expression');
+      case "undefined":
+        throw new Error("must have an expression");
 
-      case 'object':
+      case "object":
         if (param === null) {
           return Expression.NULL;
         } else if (param instanceof Expression) {
@@ -498,29 +539,29 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
         } else if (isImmutableClass(param)) {
           if (param.constructor.type) {
             // Must be a datatype
-            expressionJS = { op: 'literal', value: param };
+            expressionJS = { op: "literal", value: param };
           } else {
             throw new Error("unknown object"); //ToDo: better error
           }
         } else if (param.op) {
           expressionJS = <ExpressionJS>param;
         } else if (param.toISOString) {
-          expressionJS = { op: 'literal', value: new Date(param) };
+          expressionJS = { op: "literal", value: new Date(param) };
         } else if (Array.isArray(param)) {
-          expressionJS = { op: 'literal', value: Set.fromJS(param) };
-        } else if (hasOwnProp(param, 'start') && hasOwnProp(param, 'end')) {
-          expressionJS = { op: 'literal', value: Range.fromJS(param) };
+          expressionJS = { op: "literal", value: Set.fromJS(param) };
+        } else if (hasOwnProp(param, "start") && hasOwnProp(param, "end")) {
+          expressionJS = { op: "literal", value: Range.fromJS(param) };
         } else {
-          throw new Error('unknown parameter');
+          throw new Error("unknown parameter");
         }
         break;
 
-      case 'number':
-      case 'boolean':
-        expressionJS = { op: 'literal', value: param };
+      case "number":
+      case "boolean":
+        expressionJS = { op: "literal", value: param };
         break;
 
-      case 'string':
+      case "string":
         return Expression.parse(param);
 
       default:
@@ -530,33 +571,46 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return Expression.fromJS(expressionJS);
   }
 
-  static jsNullSafetyUnary(inputJS: string, ifNotNull: (str: string) => string): string {
-    return `(_=${inputJS},(_==null?null:${ifNotNull('_')}))`;
+  static jsNullSafetyUnary(
+    inputJS: string,
+    ifNotNull: (str: string) => string
+  ): string {
+    return `(_=${inputJS},(_==null?null:${ifNotNull("_")}))`;
   }
 
-  static jsNullSafetyBinary(lhs: string, rhs: string, combine: (lhs: string, rhs: string) => string, lhsCantBeNull?: boolean, rhsCantBeNull?: boolean): string {
+  static jsNullSafetyBinary(
+    lhs: string,
+    rhs: string,
+    combine: (lhs: string, rhs: string) => string,
+    lhsCantBeNull?: boolean,
+    rhsCantBeNull?: boolean
+  ): string {
     if (lhsCantBeNull) {
       if (rhsCantBeNull) {
         return `(${combine(lhs, rhs)})`;
       } else {
-        return `(_=${rhs},(_==null)?null:(${combine(lhs, '_')}))`;
+        return `(_=${rhs},(_==null)?null:(${combine(lhs, "_")}))`;
       }
     } else {
       if (rhsCantBeNull) {
-        return `(_=${lhs},(_==null)?null:(${combine('_', rhs)}))`;
+        return `(_=${lhs},(_==null)?null:(${combine("_", rhs)}))`;
       } else {
-        return `(_=${rhs},_2=${lhs},(_==null||_2==null)?null:(${combine('_', '_2')})`;
+        return `(_=${rhs},_2=${lhs},(_==null||_2==null)?null:(${combine(
+          "_",
+          "_2"
+        )})`;
       }
     }
   }
 
   static parseTuning(tuning: string | null): Record<string, string> {
-    if (typeof tuning !== 'string') return {};
-    const parts = tuning.split(',');
+    if (typeof tuning !== "string") return {};
+    const parts = tuning.split(",");
     let parsed: Record<string, string> = {};
     for (let part of parts) {
-      let subParts = part.split('=');
-      if (subParts.length !== 2) throw new Error(`can not parse tuning '${tuning}'`);
+      let subParts = part.split("=");
+      if (subParts.length !== 2)
+        throw new Error(`can not parse tuning '${tuning}'`);
       parsed[subParts[0]] = subParts[1];
     }
     return parsed;
@@ -571,7 +625,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param expressions the array of expressions to compose
    */
   static and(expressions: Expression[]): Expression {
-    return chainVia('and', expressions, Expression.TRUE);
+    return chainVia("and", expressions, Expression.TRUE);
   }
 
   /**
@@ -579,7 +633,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param expressions the array of expressions to compose
    */
   static or(expressions: Expression[]): Expression {
-    return chainVia('or', expressions, Expression.FALSE);
+    return chainVia("or", expressions, Expression.FALSE);
   }
 
   /**
@@ -587,7 +641,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param expressions the array of expressions to compose
    */
   static add(expressions: Expression[]): Expression {
-    return chainVia('add', expressions, Expression.ZERO);
+    return chainVia("add", expressions, Expression.ZERO);
   }
 
   /**
@@ -595,19 +649,19 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param expressions the array of expressions to compose
    */
   static subtract(expressions: Expression[]): Expression {
-    return chainVia('subtract', expressions, Expression.ZERO);
+    return chainVia("subtract", expressions, Expression.ZERO);
   }
 
   static multiply(expressions: Expression[]): Expression {
-    return chainVia('multiply', expressions, Expression.ONE);
+    return chainVia("multiply", expressions, Expression.ONE);
   }
 
   static power(expressions: Expression[]): Expression {
-    return chainVia('power', expressions, Expression.ZERO);
+    return chainVia("power", expressions, Expression.ZERO);
   }
 
   static concat(expressions: Expression[]): Expression {
-    return chainVia('concat', expressions, Expression.EMPTY_STRING);
+    return chainVia("concat", expressions, Expression.EMPTY_STRING);
   }
 
   static classMap: Record<string, typeof Expression> = {};
@@ -624,8 +678,8 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
   static applyMixins(derivedCtor: any, baseCtors: any[]) {
     // From: https://www.typescriptlang.org/docs/handbook/mixins.html
-    baseCtors.forEach(baseCtor => {
-      Object.getOwnPropertyNames(baseCtor.prototype).forEach(name => {
+    baseCtors.forEach((baseCtor) => {
+      Object.getOwnPropertyNames(baseCtor.prototype).forEach((name) => {
         derivedCtor.prototype[name] = baseCtor.prototype[name];
       });
     });
@@ -635,7 +689,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return {
       op: js.op,
       type: js.type,
-      options: js.options
+      options: js.options,
     };
   }
 
@@ -644,22 +698,22 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param expressionJS
    */
   static fromJS(expressionJS: ExpressionJS): Expression {
-    if (!expressionJS) throw new Error('must have expressionJS');
+    if (!expressionJS) throw new Error("must have expressionJS");
     if (!hasOwnProp(expressionJS, "op")) {
       if (hasOwnProp(expressionJS, "action")) {
         expressionJS = shallowCopy(expressionJS);
         expressionJS.op = expressionJS.action;
         delete expressionJS.action;
-        expressionJS.operand = { op: 'ref', name: '_' };
+        expressionJS.operand = { op: "ref", name: "_" };
       } else {
         throw new Error("op must be defined");
       }
     }
 
     // Back compat.
-    if (expressionJS.op === 'custom') {
+    if (expressionJS.op === "custom") {
       expressionJS = shallowCopy(expressionJS);
-      expressionJS.op = 'customAggregate';
+      expressionJS.op = "customAggregate";
     }
 
     let op = expressionJS.op;
@@ -668,9 +722,11 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     }
 
     // Back compat.
-    if (op === 'chain') {
+    if (op === "chain") {
       const actions = expressionJS.actions || [expressionJS.action];
-      return Expression.fromJS(expressionJS.expression).performActions(actions.map(Expression.fromJS));
+      return Expression.fromJS(expressionJS.expression).performActions(
+        actions.map(Expression.fromJS)
+      );
     }
 
     const ClassFn = Expression.getConstructorFor(op);
@@ -691,7 +747,9 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   constructor(parameters: ExpressionValue, dummy: any = null) {
     this.op = parameters.op;
     if (dummy !== dummyObject) {
-      throw new TypeError("can not call `new Expression` directly use Expression.fromJS instead");
+      throw new TypeError(
+        "can not call `new Expression` directly use Expression.fromJS instead"
+      );
     }
     if (parameters.simple) this.simple = true;
     if (parameters.options) this.options = parameters.options;
@@ -703,7 +761,9 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
       return;
     }
     if (this.op !== op) {
-      throw new TypeError(`incorrect expression op '${this.op}' (needs to be: '${op}')`);
+      throw new TypeError(
+        `incorrect expression op '${this.op}' (needs to be: '${op}')`
+      );
     }
   }
 
@@ -737,10 +797,12 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param other
    */
   public equals(other: Expression | undefined): boolean {
-    return other instanceof Expression &&
+    return (
+      other instanceof Expression &&
       this.op === other.op &&
       this.type === other.type &&
-      generalLookupsEqual(this.options, other.options);
+      generalLookupsEqual(this.options, other.options)
+    );
   }
 
   /**
@@ -749,9 +811,9 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param wantedType The type that is wanted
    */
   public canHaveType(wantedType: string): boolean {
-    let { type } =  this;
-    if (!type || type === 'NULL') return true;
-    if (wantedType === 'SET') {
+    let { type } = this;
+    if (!type || type === "NULL") return true;
+    if (wantedType === "SET") {
       return Set.isSetType(type);
     } else {
       return type === wantedType;
@@ -801,7 +863,8 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   public getBaseExternals(): External[] {
     let externals: External[] = [];
     this.forEach((ex: Expression) => {
-      if (ex instanceof ExternalExpression) externals.push(ex.external.getBase());
+      if (ex instanceof ExternalExpression)
+        externals.push(ex.external.getBase());
     });
     return External.deduplicateExternals(externals);
   }
@@ -809,7 +872,8 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   public getRawExternals(): External[] {
     let externals: External[] = [];
     this.forEach((ex: Expression) => {
-      if (ex instanceof ExternalExpression) externals.push(ex.external.getRaw());
+      if (ex instanceof ExternalExpression)
+        externals.push(ex.external.getRaw());
     });
     return External.deduplicateExternals(externals);
   }
@@ -827,10 +891,9 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
           limit--;
           externalsByIndex[index] = {
             external: ex.external,
-            terminal: true
+            terminal: true,
           };
         }
-
       } else if (ex instanceof ChainableExpression) {
         let h = ex._headExternal();
         if (h) {
@@ -843,8 +906,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
             return null;
           }
         }
-
-      } else if (ex instanceof LiteralExpression && ex.type === 'DATASET') {
+      } else if (ex instanceof LiteralExpression && ex.type === "DATASET") {
         let datasetExternals = (ex.value as Dataset).getReadyExternals(limit);
         let size = sizeOfDatasetExternalAlterations(datasetExternals);
         if (size) {
@@ -858,12 +920,16 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return externalsByIndex;
   }
 
-  public applyReadyExternals(alterations: ExpressionExternalAlteration): Expression {
+  public applyReadyExternals(
+    alterations: ExpressionExternalAlteration
+  ): Expression {
     return this.substitute((ex, index) => {
       let alteration = alterations[index];
       if (!alteration) return null;
       if (Array.isArray(alteration)) {
-        return r((ex.getLiteralValue() as Dataset).applyReadyExternals(alteration));
+        return r(
+          (ex.getLiteralValue() as Dataset).applyReadyExternals(alteration)
+        );
       } else {
         return r(alteration.result);
       }
@@ -875,7 +941,11 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     let allGood = true;
     let offset = 0;
     while (ex instanceof ChainableExpression) {
-      allGood = allGood && (ex.op === 'filter' ? ex.argumentsResolvedWithoutExternals() : ex.argumentsResolved());
+      allGood =
+        allGood &&
+        (ex.op === "filter"
+          ? ex.argumentsResolvedWithoutExternals()
+          : ex.argumentsResolved());
       ex = ex.operand;
       offset++;
     }
@@ -884,7 +954,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
       return {
         allGood,
         external: ex.external,
-        offset
+        offset,
       };
     } else {
       return null;
@@ -903,7 +973,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     let freeReferences: string[] = [];
     this.forEach((ex: Expression, index: int, depth: int, nestDiff: int) => {
       if (ex instanceof RefExpression && nestDiff <= ex.nest) {
-        freeReferences.push(repeat('^', ex.nest - nestDiff) + ex.name);
+        freeReferences.push(repeat("^", ex.nest - nestDiff) + ex.name);
       }
     });
     return deduplicateSort(freeReferences);
@@ -930,7 +1000,10 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     let freeReferenceIndexes = this.getFreeReferenceIndexes();
     if (freeReferenceIndexes.length === 0) return this;
     return this.substitute((ex: Expression, index: int) => {
-      if (ex instanceof RefExpression && freeReferenceIndexes.indexOf(index) !== -1) {
+      if (
+        ex instanceof RefExpression &&
+        freeReferenceIndexes.indexOf(index) !== -1
+      ) {
         return ex.incrementNesting(by);
       }
       return null;
@@ -954,7 +1027,13 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return this._everyHelper(iter, thisArg, { index: 0 }, 0, 0);
   }
 
-  public _everyHelper(iter: BooleanExpressionIterator, thisArg: any, indexer: Indexer, depth: int, nestDiff: int): boolean {
+  public _everyHelper(
+    iter: BooleanExpressionIterator,
+    thisArg: any,
+    indexer: Indexer,
+    depth: int,
+    nestDiff: int
+  ): boolean {
     let pass = iter.call(thisArg, this, indexer.index, depth, nestDiff);
     if (pass != null) {
       return pass;
@@ -970,10 +1049,13 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param thisArg The this for the substitution function
    */
   public some(iter: BooleanExpressionIterator, thisArg?: any): boolean {
-    return !this.every((ex: Expression, index: int, depth: int, nestDiff: int) => {
-      let v = iter.call(this, ex, index, depth, nestDiff);
-      return (v == null) ? null : !v;
-    }, thisArg);
+    return !this.every(
+      (ex: Expression, index: int, depth: int, nestDiff: int) => {
+        let v = iter.call(this, ex, index, depth, nestDiff);
+        return v == null ? null : !v;
+      },
+      thisArg
+    );
   }
 
   /**
@@ -993,17 +1075,39 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * if substitutionFn returns an expression than it is replaced; if null is returned this expression is returned
    * @param substitutionFn The function with which to substitute
    */
-  public substitute(substitutionFn: SubstitutionFn, typeContext: DatasetFullType = null): Expression {
-    return this._substituteHelper(substitutionFn, { index: 0 }, 0, 0, typeContext).expression;
+  public substitute(
+    substitutionFn: SubstitutionFn,
+    typeContext: DatasetFullType = null
+  ): Expression {
+    return this._substituteHelper(
+      substitutionFn,
+      { index: 0 },
+      0,
+      0,
+      typeContext
+    ).expression;
   }
 
-  public _substituteHelper(substitutionFn: SubstitutionFn, indexer: Indexer, depth: int, nestDiff: int, typeContext: DatasetFullType): ExpressionTypeContext {
-    let sub = substitutionFn.call(this, this, indexer.index, depth, nestDiff, typeContext);
+  public _substituteHelper(
+    substitutionFn: SubstitutionFn,
+    indexer: Indexer,
+    depth: int,
+    nestDiff: int,
+    typeContext: DatasetFullType
+  ): ExpressionTypeContext {
+    let sub = substitutionFn.call(
+      this,
+      this,
+      indexer.index,
+      depth,
+      nestDiff,
+      typeContext
+    );
     if (sub) {
       indexer.index += this.expressionCount();
       return {
         expression: sub,
-        typeContext: sub.updateTypeContextIfNeeded(typeContext)
+        typeContext: sub.updateTypeContextIfNeeded(typeContext),
       };
     } else {
       indexer.index++;
@@ -1011,7 +1115,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
     return {
       expression: this,
-      typeContext: this.updateTypeContextIfNeeded(typeContext)
+      typeContext: this.updateTypeContextIfNeeded(typeContext),
     };
   }
 
@@ -1025,37 +1129,37 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
   public abstract getJS(datumVar: string): string;
 
-  public getJSFn(datumVar = 'd[]'): string {
+  public getJSFn(datumVar = "d[]"): string {
     const { type } = this;
     let jsEx = this.getJS(datumVar);
     let body: string;
-    if (type === 'NUMBER' || type === 'NUMBER_RANGE' || type === 'TIME') {
+    if (type === "NUMBER" || type === "NUMBER_RANGE" || type === "TIME") {
       body = `_=${jsEx};return isNaN(_)?null:_`;
     } else {
       body = `return ${jsEx};`;
     }
-    return `function(${datumVar.replace('[]', '')}){var _,_2;${body}}`;
+    return `function(${datumVar.replace("[]", "")}){var _,_2;${body}}`;
   }
 
   public abstract getSQL(dialect: SQLDialect): string;
 
   public extractFromAnd(matchFn: ExpressionMatchFn): ExtractAndRest {
-    if (this.type !== 'BOOLEAN') return null;
+    if (this.type !== "BOOLEAN") return null;
     if (matchFn(this)) {
       return {
         extract: this,
-        rest: Expression.TRUE
+        rest: Expression.TRUE,
       };
     } else {
       return {
         extract: Expression.TRUE,
-        rest: this
+        rest: this,
       };
     }
   }
 
-  public breakdownByDataset(tempNamePrefix = 'b'): DatasetBreakdown {
-    throw new Error('ToDo');
+  public breakdownByDataset(tempNamePrefix = "b"): DatasetBreakdown {
+    throw new Error("ToDo");
     // let nameIndex = 0;
     // let singleDatasetActions: ApplyExpression[] = [];
     //
@@ -1096,7 +1200,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   }
 
   public performAction(action: Expression): Expression {
-    return action.substitute((ex) => ex.equals(Expression._) ? this : null);
+    return action.substitute((ex) => (ex.equals(Expression._) ? this : null));
   }
 
   public performActions(actions: Expression[]): Expression {
@@ -1124,12 +1228,15 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   // ------------------------------------------------------------------------
   // API behaviour
 
-  private _mkChain<T extends ChainableUnaryExpression>(ExpressionClass: any, exs: any[]): T {
+  private _mkChain<T extends ChainableUnaryExpression>(
+    ExpressionClass: any,
+    exs: any[]
+  ): T {
     let cur: any = this;
     for (let ex of exs) {
       cur = new ExpressionClass({
         operand: cur,
-        expression: ex instanceof Expression ? ex : Expression.fromJSLoose(ex)
+        expression: ex instanceof Expression ? ex : Expression.fromJSLoose(ex),
       });
     }
     return cur;
@@ -1249,7 +1356,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
     // Back Compat
     if (Range.isRangeType(ex.type)) {
-      return (new OverlapExpression({ operand: this, expression: ex }) as any);
+      return new OverlapExpression({ operand: this, expression: ex }) as any;
     }
 
     return new InExpression({ operand: this, expression: ex });
@@ -1260,24 +1367,24 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
       ex = getValue(ex);
       snd = getValue(snd);
 
-      if (typeof ex === 'string') {
+      if (typeof ex === "string") {
         let parse = parseISODate(ex, Expression.defaultParserTimezone);
         if (parse) ex = parse;
       }
 
-      if (typeof snd === 'string') {
+      if (typeof snd === "string") {
         let parse = parseISODate(snd, Expression.defaultParserTimezone);
         if (parse) snd = parse;
       }
 
-      if (typeof ex === 'number' && typeof snd === 'number') {
+      if (typeof ex === "number" && typeof snd === "number") {
         ex = new NumberRange({ start: ex, end: snd });
       } else if (ex.toISOString && (snd as Date).toISOString) {
-        ex = new TimeRange({ start: ex, end: (snd as Date) });
-      } else if (typeof ex === 'string' && typeof snd === 'string') {
+        ex = new TimeRange({ start: ex, end: snd as Date });
+      } else if (typeof ex === "string" && typeof snd === "string") {
         ex = new StringRange({ start: ex, end: snd });
       } else {
-        throw new Error('uninterpretable IN parameters');
+        throw new Error("uninterpretable IN parameters");
       }
     }
 
@@ -1300,7 +1407,11 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   // String manipulation
 
   public substr(position: number, len: number) {
-    return new SubstrExpression({ operand: this, position: getNumber(position), len: getNumber(len) });
+    return new SubstrExpression({
+      operand: this,
+      position: getNumber(position),
+      len: getNumber(len),
+    });
   }
 
   public extract(re: string) {
@@ -1312,7 +1423,10 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   }
 
   public lookup(lookupFn: string) {
-    return new LookupExpression({ operand: this, lookupFn: getString(lookupFn) });
+    return new LookupExpression({
+      operand: this,
+      lookupFn: getString(lookupFn),
+    });
   }
 
   public indexOf(ex: any) {
@@ -1321,19 +1435,36 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   }
 
   public transformCase(transformType: CaseType) {
-    return new TransformCaseExpression({ operand: this, transformType: getString(transformType) as CaseType });
+    return new TransformCaseExpression({
+      operand: this,
+      transformType: getString(transformType) as CaseType,
+    });
   }
 
   public customTransform(custom: string, outputType?: PlyTypeSingleValue) {
-    if (!custom) throw new Error("Must provide an extraction function name for custom transform");
-    outputType = outputType !== undefined ? getString(outputType) as PlyTypeSingleValue : null;
-    return new CustomTransformExpression({ operand: this, custom: getString(custom), outputType });
+    if (!custom)
+      throw new Error(
+        "Must provide an extraction function name for custom transform"
+      );
+    outputType =
+      outputType !== undefined
+        ? (getString(outputType) as PlyTypeSingleValue)
+        : null;
+    return new CustomTransformExpression({
+      operand: this,
+      custom: getString(custom),
+      outputType,
+    });
   }
 
   // Number manipulation
 
   public numberBucket(size: number, offset = 0) {
-    return new NumberBucketExpression({ operand: this, size: getNumber(size), offset: getNumber(offset) });
+    return new NumberBucketExpression({
+      operand: this,
+      size: getNumber(size),
+      offset: getNumber(offset),
+    });
   }
 
   public absolute() {
@@ -1347,38 +1478,54 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   // Time manipulation
 
   public timeBucket(duration: any, timezone?: any) {
-    if (!(duration instanceof Duration)) duration = Duration.fromJS(getString(duration));
-    if (timezone && !(timezone instanceof Timezone)) timezone = Timezone.fromJS(getString(timezone));
+    if (!(duration instanceof Duration))
+      duration = Duration.fromJS(getString(duration));
+    if (timezone && !(timezone instanceof Timezone))
+      timezone = Timezone.fromJS(getString(timezone));
     return new TimeBucketExpression({ operand: this, duration, timezone });
   }
 
   public timeFloor(duration: any, timezone?: any) {
-    if (!(duration instanceof Duration)) duration = Duration.fromJS(getString(duration));
-    if (timezone && !(timezone instanceof Timezone)) timezone = Timezone.fromJS(getString(timezone));
+    if (!(duration instanceof Duration))
+      duration = Duration.fromJS(getString(duration));
+    if (timezone && !(timezone instanceof Timezone))
+      timezone = Timezone.fromJS(getString(timezone));
     return new TimeFloorExpression({ operand: this, duration, timezone });
   }
 
   public timeShift(duration: any, step?: number, timezone?: any) {
-    if (!(duration instanceof Duration)) duration = Duration.fromJS(getString(duration));
-    step = typeof step !== 'undefined' ? getNumber(step) : null;
-    if (timezone && !(timezone instanceof Timezone)) timezone = Timezone.fromJS(getString(timezone));
+    if (!(duration instanceof Duration))
+      duration = Duration.fromJS(getString(duration));
+    step = typeof step !== "undefined" ? getNumber(step) : null;
+    if (timezone && !(timezone instanceof Timezone))
+      timezone = Timezone.fromJS(getString(timezone));
     return new TimeShiftExpression({ operand: this, duration, step, timezone });
   }
 
   public timeRange(duration: any, step?: number, timezone?: any) {
-    if (!(duration instanceof Duration)) duration = Duration.fromJS(getString(duration));
-    step = typeof step !== 'undefined' ? getNumber(step) : null;
-    if (timezone && !(timezone instanceof Timezone)) timezone = Timezone.fromJS(getString(timezone));
+    if (!(duration instanceof Duration))
+      duration = Duration.fromJS(getString(duration));
+    step = typeof step !== "undefined" ? getNumber(step) : null;
+    if (timezone && !(timezone instanceof Timezone))
+      timezone = Timezone.fromJS(getString(timezone));
     return new TimeRangeExpression({ operand: this, duration, step, timezone });
   }
 
   public timePart(part: string, timezone?: any) {
-    if (timezone && !(timezone instanceof Timezone)) timezone = Timezone.fromJS(getString(timezone));
-    return new TimePartExpression({ operand: this, part: getString(part), timezone });
+    if (timezone && !(timezone instanceof Timezone))
+      timezone = Timezone.fromJS(getString(timezone));
+    return new TimePartExpression({
+      operand: this,
+      part: getString(part),
+      timezone,
+    });
   }
 
   public cast(outputType: PlyType) {
-    return new CastExpression({ operand: this, outputType: getString(outputType) as PlyTypeSimple });
+    return new CastExpression({
+      operand: this,
+      outputType: getString(outputType) as PlyTypeSimple,
+    });
   }
 
   // Set operations
@@ -1405,9 +1552,10 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     // Determine if use case #2 (ex + name)
     if (
       arguments.length === 3 ||
-      ((arguments.length === 2 || arguments.length === 1) && (typeof splits === 'string' || typeof splits.op === 'string'))
+      ((arguments.length === 2 || arguments.length === 1) &&
+        (typeof splits === "string" || typeof splits.op === "string"))
     ) {
-      name = arguments.length === 1 ? 'split' : getString(name);
+      name = arguments.length === 1 ? "split" : getString(name);
       let realSplits = Object.create(null);
       realSplits[name] = splits;
       splits = realSplits;
@@ -1419,12 +1567,20 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     for (let k in splits) {
       if (!hasOwnProp(splits, k)) continue;
       let ex = splits[k];
-      parsedSplits[k] = ex instanceof Expression ? ex : Expression.fromJSLoose(ex);
+      parsedSplits[k] =
+        ex instanceof Expression ? ex : Expression.fromJSLoose(ex);
     }
 
     dataName = dataName ? getString(dataName) : getDataName(this);
-    if (!dataName) throw new Error("could not guess data name in `split`, please provide one explicitly");
-    return new SplitExpression({ operand: this, splits: parsedSplits, dataName: dataName });
+    if (!dataName)
+      throw new Error(
+        "could not guess data name in `split`, please provide one explicitly"
+      );
+    return new SplitExpression({
+      operand: this,
+      splits: parsedSplits,
+      dataName: dataName,
+    });
   }
 
   /**
@@ -1433,14 +1589,25 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param ex The expression to evaluate
    */
   public apply(name: string, ex: any) {
-    if (arguments.length < 2) throw new Error('invalid arguments to .apply, did you forget to specify a name?');
+    if (arguments.length < 2)
+      throw new Error(
+        "invalid arguments to .apply, did you forget to specify a name?"
+      );
     if (!(ex instanceof Expression)) ex = Expression.fromJSLoose(ex);
-    return new ApplyExpression({ operand: this, name: getString(name), expression: ex });
+    return new ApplyExpression({
+      operand: this,
+      name: getString(name),
+      expression: ex,
+    });
   }
 
   public sort(ex: any, direction?: Direction) {
     if (!(ex instanceof Expression)) ex = Expression.fromJSLoose(ex);
-    return new SortExpression({ operand: this, expression: ex, direction: direction ? (getString(direction) as Direction) : null });
+    return new SortExpression({
+      operand: this,
+      expression: ex,
+      direction: direction ? (getString(direction) as Direction) : null,
+    });
   }
 
   public limit(value: number) {
@@ -1449,15 +1616,20 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
   public select(attributes: string[]): SelectExpression;
   public select(...attributes: any[]): SelectExpression {
-    attributes = (attributes.length === 1 && Array.isArray(attributes[0])) ? attributes[0] : attributes.map(getString);
+    attributes =
+      attributes.length === 1 && Array.isArray(attributes[0])
+        ? attributes[0]
+        : attributes.map(getString);
     return new SelectExpression({ operand: this, attributes });
   }
-
 
   // Aggregate expressions
 
   public count() {
-    if (arguments.length) throw new Error('.count() should not have arguments, did you want to .filter().count() ?');
+    if (arguments.length)
+      throw new Error(
+        ".count() should not have arguments, did you want to .filter().count() ?"
+      );
     return new CountExpression({ operand: this });
   }
 
@@ -1488,7 +1660,12 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
 
   public quantile(ex: any, value: number, tuning?: string) {
     if (!(ex instanceof Expression)) ex = Expression.fromJSLoose(ex);
-    return new QuantileExpression({ operand: this, expression: ex, value: getNumber(value), tuning: tuning ? getString(tuning) : null });
+    return new QuantileExpression({
+      operand: this,
+      expression: ex,
+      value: getNumber(value),
+      tuning: tuning ? getString(tuning) : null,
+    });
   }
 
   public collect(ex: any) {
@@ -1497,7 +1674,10 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
   }
 
   public customAggregate(custom: string) {
-    return new CustomAggregateExpression({ operand: this, custom: getString(custom) });
+    return new CustomAggregateExpression({
+      operand: this,
+      custom: getString(custom),
+    });
   }
 
   // Undocumented (for now)
@@ -1519,7 +1699,8 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     if (!environment.timezone) environment = { timezone: Timezone.UTC };
 
     // Allow strings as well
-    if (typeof environment.timezone === 'string') environment = { timezone: Timezone.fromJS(environment.timezone as any) };
+    if (typeof environment.timezone === "string")
+      environment = { timezone: Timezone.fromJS(environment.timezone as any) };
 
     return this.substitute((ex) => {
       if (ex.needsEnvironment()) {
@@ -1556,7 +1737,9 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @deprecated
    */
   public referenceCheckInTypeContext(typeContext: DatasetFullType): Expression {
-    console.warn(`referenceCheckInTypeContext is deprecated, use changeInTypeContext instead`);
+    console.warn(
+      `referenceCheckInTypeContext is deprecated, use changeInTypeContext instead`
+    );
     return this.changeInTypeContext(typeContext);
   }
 
@@ -1565,22 +1748,36 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param typeContext The FullType context within which to resolve
    */
   public changeInTypeContext(typeContext: DatasetFullType): Expression {
-    return this.substitute((ex: Expression, index: int, depth: int, nestDiff: int, typeContext: DatasetFullType) => {
-      if (ex instanceof RefExpression) {
-        return ex.changeInTypeContext(typeContext);
-      }
-      return null;
-    }, typeContext);
+    return this.substitute(
+      (
+        ex: Expression,
+        index: int,
+        depth: int,
+        nestDiff: int,
+        typeContext: DatasetFullType
+      ) => {
+        if (ex instanceof RefExpression) {
+          return ex.changeInTypeContext(typeContext);
+        }
+        return null;
+      },
+      typeContext
+    );
   }
 
-  public updateTypeContext(typeContext: DatasetFullType, extra?: any): DatasetFullType {
+  public updateTypeContext(
+    typeContext: DatasetFullType,
+    extra?: any
+  ): DatasetFullType {
     return typeContext;
   }
 
-  public updateTypeContextIfNeeded(typeContext: DatasetFullType | null, extra?: any): DatasetFullType | null {
+  public updateTypeContextIfNeeded(
+    typeContext: DatasetFullType | null,
+    extra?: any
+  ): DatasetFullType | null {
     return typeContext ? this.updateTypeContext(typeContext, extra) : null;
   }
-
 
   /**
    * Resolves one level of dependencies that refer outside of this expression.
@@ -1588,7 +1785,7 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param ifNotFound If the reference is not in the context what to do? "throw", "leave", "null"
    * @return The resolved expression
    */
-  public resolve(context: Datum, ifNotFound: IfNotFound = 'throw'): Expression {
+  public resolve(context: Datum, ifNotFound: IfNotFound = "throw"): Expression {
     let expressions: Record<string, Expression> = Object.create(null);
     for (let k in context) {
       if (!hasOwnProp(context, k)) continue;
@@ -1605,60 +1802,69 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return this.resolveWithExpressions(expressions, ifNotFound);
   }
 
-  public resolveWithExpressions(expressions: Record<string, Expression>, ifNotFound: IfNotFound = 'throw'): Expression {
-    return this.substitute((ex: Expression, index: int, depth: int, nestDiff: int) => {
-      if (ex instanceof RefExpression) {
-        const { nest, ignoreCase, name } = ex;
-        if (nestDiff === nest) {
-          let foundExpression: Expression = null;
-          let valueFound = false;
-          let property = ignoreCase ? RefExpression.findPropertyCI(expressions, name) : RefExpression.findProperty(expressions, name);
-          if (property != null) {
-            foundExpression = expressions[property];
-            valueFound = true;
-          }
-
-          if (foundExpression instanceof ExternalExpression) {
-            let mode = foundExpression.external.mode;
-
-            // Never substitute split externals at all
-            if (mode === 'split') {
-              return ex;
+  public resolveWithExpressions(
+    expressions: Record<string, Expression>,
+    ifNotFound: IfNotFound = "throw"
+  ): Expression {
+    return this.substitute(
+      (ex: Expression, index: int, depth: int, nestDiff: int) => {
+        if (ex instanceof RefExpression) {
+          const { nest, ignoreCase, name } = ex;
+          if (nestDiff === nest) {
+            let foundExpression: Expression = null;
+            let valueFound = false;
+            let property = ignoreCase
+              ? RefExpression.findPropertyCI(expressions, name)
+              : RefExpression.findProperty(expressions, name);
+            if (property != null) {
+              foundExpression = expressions[property];
+              valueFound = true;
             }
 
-            // Never substitute non-raw externals from an outside nesting
-            if (nest > 0 && mode !== 'raw') {
+            if (foundExpression instanceof ExternalExpression) {
+              let mode = foundExpression.external.mode;
+
+              // Never substitute split externals at all
+              if (mode === "split") {
+                return ex;
+              }
+
+              // Never substitute non-raw externals from an outside nesting
+              if (nest > 0 && mode !== "raw") {
+                return ex;
+              }
+            }
+
+            if (valueFound) {
+              return foundExpression;
+            } else if (ifNotFound === "throw") {
+              throw new Error(
+                `could not resolve ${ex} because is was not in the context`
+              );
+            } else if (ifNotFound === "null") {
+              return Expression.NULL;
+            } else if (ifNotFound === "leave") {
               return ex;
             }
+          } else if (nestDiff < nest) {
+            throw new Error(`went too deep during resolve on: ${ex}`);
           }
-
-          if (valueFound) {
-            return foundExpression;
-          } else if (ifNotFound === 'throw') {
-            throw new Error(`could not resolve ${ex} because is was not in the context`);
-          } else if (ifNotFound === 'null') {
-            return Expression.NULL;
-          } else if (ifNotFound === 'leave') {
-            return ex;
-          }
-        } else if (nestDiff < nest) {
-          throw new Error(`went too deep during resolve on: ${ex}`);
         }
+        return null;
       }
-      return null;
-    });
+    );
   }
 
   public resolved(): boolean {
     return this.every((ex, index, depth, nestDiff) => {
-      return (ex instanceof RefExpression) ? ex.nest <= nestDiff : null; // Search within
+      return ex instanceof RefExpression ? ex.nest <= nestDiff : null; // Search within
     });
   }
 
   public resolvedWithoutExternals(): boolean {
     return this.every((ex, index, depth, nestDiff) => {
       if (ex instanceof ExternalExpression) return false;
-      return (ex instanceof RefExpression) ? ex.nest <= nestDiff : null; // Search within
+      return ex instanceof RefExpression ? ex.nest <= nestDiff : null; // Search within
     });
   }
 
@@ -1703,26 +1909,31 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * Returns the maximum number of possible values this expression can return in a split context
    */
   public maxPossibleSplitValues(): number {
-    return this.type === 'BOOLEAN' ? 3 : Infinity;
+    return this.type === "BOOLEAN" ? 3 : Infinity;
   }
 
   // ---------------------------------------------------------
   // Evaluation
 
-  private _initialPrepare(context: Datum, environment: Environment): Expression {
+  private _initialPrepare(
+    context: Datum,
+    environment: Environment
+  ): Expression {
     return this.defineEnvironment(environment)
       .referenceCheck(context)
       .resolve(context)
       .simplify();
   }
 
-
   /**
    * Simulates computing the expression and returns the results with the right shape (but fake data)
    * @param context The context within which to compute the expression
    * @param options The options within which to evaluate
    */
-  public simulate(context: Datum = {}, options: ComputeOptions = {}): PlywoodValue {
+  public simulate(
+    context: Datum = {},
+    options: ComputeOptions = {}
+  ): PlywoodValue {
     failIfIntrospectNeededInDatum(context);
 
     let readyExpression = this._initialPrepare(context, options);
@@ -1734,13 +1945,15 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return readyExpression._computeResolvedSimulate(options, []);
   }
 
-
   /**
    * Simulates computing the expression and returns the queries that would have been made
    * @param context The context within which to compute the expression
    * @param options The options within which to evaluate
    */
-  public simulateQueryPlan(context: Datum = {}, options: ComputeOptions = {}): any[][] {
+  public simulateQueryPlan(
+    context: Datum = {},
+    options: ComputeOptions = {}
+  ): any[][] {
     failIfIntrospectNeededInDatum(context);
 
     let readyExpression = this._initialPrepare(context, options);
@@ -1754,12 +1967,15 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return simulatedQueryGroups;
   }
 
-  private _computeResolvedSimulate(options: ComputeOptions, simulatedQueryGroups: any[][]): PlywoodValue {
+  private _computeResolvedSimulate(
+    options: ComputeOptions,
+    simulatedQueryGroups: any[][]
+  ): PlywoodValue {
     const {
       maxComputeCycles = 5,
       maxQueries = 500,
       maxRows,
-      concurrentQueryLimit = Infinity
+      concurrentQueryLimit = Infinity,
     } = options;
 
     let ex: Expression = this;
@@ -1768,7 +1984,11 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     let computeCycles = 0;
     let queries = 0;
 
-    while (Object.keys(readyExternals).length > 0 && computeCycles < maxComputeCycles && queries < maxQueries) {
+    while (
+      Object.keys(readyExternals).length > 0 &&
+      computeCycles < maxComputeCycles &&
+      queries < maxQueries
+    ) {
       let simulatedQueryGroup: any[] = [];
       fillExpressionExternalAlteration(readyExternals, (external, terminal) => {
         if (queries < maxQueries) {
@@ -1792,19 +2012,24 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     return ex.getLiteralValue();
   }
 
-
   /**
    * Computes a general asynchronous expression
    * @param context The context within which to compute the expression
    * @param options The options determining computation
    */
-  public compute(context: Datum = {}, options: ComputeOptions = {}): Promise<PlywoodValue> {
+  public compute(
+    context: Datum = {},
+    options: ComputeOptions = {}
+  ): Promise<PlywoodValue> {
     return Promise.resolve(null)
       .then(() => {
         return introspectDatum(context);
       })
       .then((introspectedContext: Datum) => {
-        let readyExpression = this._initialPrepare(introspectedContext, options);
+        let readyExpression = this._initialPrepare(
+          introspectedContext,
+          options
+        );
         if (readyExpression instanceof ExternalExpression) {
           // Top level externals need to be unsuppressed
           readyExpression = readyExpression.unsuppress();
@@ -1819,33 +2044,41 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
    * @param context The context within which to compute the expression
    * @param options The options determining computation
    */
-  public computeStream(context: Datum = {}, options: ComputeOptions = {}): ReadableStream {
+  public computeStream(
+    context: Datum = {},
+    options: ComputeOptions = {}
+  ): ReadableStream {
     const pt = new PassThrough({ objectMode: true });
 
     let rawQueries = options.rawQueries;
 
     introspectDatum(context)
       .then((introspectedContext: Datum) => {
-        let readyExpression = this._initialPrepare(introspectedContext, options);
+        let readyExpression = this._initialPrepare(
+          introspectedContext,
+          options
+        );
         if (readyExpression instanceof ExternalExpression) {
           // Top level externals need to be unsuppressed
           //readyExpression = readyExpression.unsuppress();
-          pipeWithError(readyExpression.external.queryValueStream(true, rawQueries), pt);
+          pipeWithError(
+            readyExpression.external.queryValueStream(true, rawQueries),
+            pt
+          );
           return;
         }
 
-        readyExpression._computeResolved(options)
-          .then((v) => {
-            const i = iteratorFactory(v as Dataset);
-            let bit: PlyBit;
-            while (bit = i()) {
-              pt.write(bit);
-            }
-            pt.end();
-          });
+        readyExpression._computeResolved(options).then((v) => {
+          const i = iteratorFactory(v as Dataset);
+          let bit: PlyBit;
+          while ((bit = i())) {
+            pt.write(bit);
+          }
+          pt.end();
+        });
       })
       .catch((e) => {
-        pt.emit('error', e);
+        pt.emit("error", e);
       });
 
     return pt as any;
@@ -1859,8 +2092,8 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
       maxQueries = 500,
       maxRows,
       concurrentQueryLimit = Infinity,
-      beforePerSplitRequestFn = function(){},
-      afterSplitRequestFn = function(){},
+      beforePerSplitRequestFn = function () {},
+      afterSplitRequestFn = function () {},
     } = options;
 
     let ex: Expression = this;
@@ -1869,19 +2102,27 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
     let computeCycles = 0;
     let queriesMade = 0;
     return promiseWhile(
-      () => Object.keys(readyExternals).length > 0 && computeCycles < maxComputeCycles && queriesMade < maxQueries,
+      () =>
+        Object.keys(readyExternals).length > 0 &&
+        computeCycles < maxComputeCycles &&
+        queriesMade < maxQueries,
       async () => {
-        const readyExternalsFilled = await fillExpressionExternalAlterationAsync(readyExternals, (external, terminal) => {
-          if (queriesMade < maxQueries) {
-            queriesMade++;
-            beforePerSplitRequestFn(external);
-            // todo: 3
-            return external.queryValue(terminal, rawQueries, customOptions);
-          } else {
-            queriesMade++;
-            return Promise.resolve(null); // Query limit reached, don't do any more queries.
-          }
-        });
+        const readyExternalsFilled =
+          await fillExpressionExternalAlterationAsync(
+            readyExternals,
+            (external, terminal) => {
+              if (queriesMade < maxQueries) {
+                queriesMade++;
+                beforePerSplitRequestFn(external);
+                // todo: 3
+                return external.queryValue(terminal, rawQueries, customOptions);
+              } else {
+                queriesMade++;
+                return Promise.reject(new Error("Query limit exceeded."));
+                // return Promise.resolve(null); // Query limit reached, don't do any more queries.
+              }
+            }
+          );
 
         afterSplitRequestFn(queriesMade);
         ex = ex.applyReadyExternals(readyExternalsFilled);
@@ -1892,15 +2133,13 @@ export abstract class Expression implements Instance<ExpressionValue, Expression
         readyExternals = ex.getReadyExternals(concurrentQueryLimit);
         computeCycles++;
       }
-    )
-      .then(() => {
-        if (!ex.isOp('literal')) throw new Error(`something went wrong, did not get literal: ${ex}`);
-        return ex.getLiteralValue();
-      });
+    ).then(() => {
+      if (!ex.isOp("literal"))
+        throw new Error(`something went wrong, did not get literal: ${ex}`);
+      return ex.getLiteralValue();
+    });
   }
-
 }
-
 
 export abstract class ChainableExpression extends Expression {
   static jsToValue(js: ExpressionJS): ExpressionValue {
@@ -1916,27 +2155,41 @@ export abstract class ChainableExpression extends Expression {
     this.operand = value.operand || Expression._;
   }
 
-  protected _checkTypeAgainstTypes(name: string, type: string, neededTypes: string[]) {
-    if (type && type !== 'NULL' && neededTypes.indexOf(type) === -1) {
+  protected _checkTypeAgainstTypes(
+    name: string,
+    type: string,
+    neededTypes: string[]
+  ) {
+    if (type && type !== "NULL" && neededTypes.indexOf(type) === -1) {
       if (neededTypes.length === 1) {
-        throw new Error(`${this.op} must have ${name} of type ${neededTypes[0]} (is ${type})`);
+        throw new Error(
+          `${this.op} must have ${name} of type ${neededTypes[0]} (is ${type})`
+        );
       } else {
-        throw new Error(`${this.op} must have ${name} of type ${neededTypes.join(' or ')} (is ${type})`);
+        throw new Error(
+          `${this.op} must have ${name} of type ${neededTypes.join(
+            " or "
+          )} (is ${type})`
+        );
       }
     }
   }
 
   protected _checkOperandTypes(...neededTypes: string[]) {
-    this._checkTypeAgainstTypes('operand', Set.unwrapSetType(this.operand.type), neededTypes);
+    this._checkTypeAgainstTypes(
+      "operand",
+      Set.unwrapSetType(this.operand.type),
+      neededTypes
+    );
   }
 
   protected _checkOperandTypesStrict(...neededTypes: string[]) {
-    this._checkTypeAgainstTypes('operand', this.operand.type, neededTypes);
+    this._checkTypeAgainstTypes("operand", this.operand.type, neededTypes);
   }
 
   protected _bumpOperandToTime() {
-    if (this.operand.type === 'STRING') {
-      this.operand = this.operand.upgradeToType('TIME');
+    if (this.operand.type === "STRING") {
+      this.operand = this.operand.upgradeToType("TIME");
     }
   }
 
@@ -1959,12 +2212,13 @@ export abstract class ChainableExpression extends Expression {
   }
 
   public toString(indent?: int): string {
-    return `${this.operand.toString(indent)}.${this.op}(${this._toStringParameters(indent).join(',')})`;
+    return `${this.operand.toString(indent)}.${
+      this.op
+    }(${this._toStringParameters(indent).join(",")})`;
   }
 
   public equals(other: ChainableExpression | undefined): boolean {
-    return super.equals(other) &&
-      this.operand.equals(other.operand);
+    return super.equals(other) && this.operand.equals(other.operand);
   }
 
   public changeOperand(operand: Expression): this {
@@ -1981,7 +2235,7 @@ export abstract class ChainableExpression extends Expression {
     if (operand instanceof ChainableExpression) {
       return operand.changeOperand(this.changeOperand(operand.operand));
     } else {
-      throw new Error('operand must be chainable');
+      throw new Error("operand must be chainable");
     }
   }
 
@@ -2001,7 +2255,9 @@ export abstract class ChainableExpression extends Expression {
 
   public expressionCount(): int {
     let sum = super.expressionCount() + this.operand.expressionCount();
-    this.getArgumentExpressions().forEach(ex => sum += ex.expressionCount());
+    this.getArgumentExpressions().forEach(
+      (ex) => (sum += ex.expressionCount())
+    );
     return sum;
   }
 
@@ -2010,7 +2266,9 @@ export abstract class ChainableExpression extends Expression {
   }
 
   public argumentsResolvedWithoutExternals(): boolean {
-    return this.getArgumentExpressions().every((ex) => ex.resolvedWithoutExternals());
+    return this.getArgumentExpressions().every((ex) =>
+      ex.resolvedWithoutExternals()
+    );
   }
 
   public getFn(): ComputeFn {
@@ -2018,19 +2276,17 @@ export abstract class ChainableExpression extends Expression {
     return (d: Datum) => this.calc(d);
   }
 
-
   protected _calcChainableHelper(operandValue: any): PlywoodValue {
     throw runtimeAbstract();
   }
 
   public fullyDefined(): boolean {
-    return this.operand.isOp('literal');
+    return this.operand.isOp("literal");
   }
 
   public calc(datum: Datum): PlywoodValue {
     return this._calcChainableHelper(this.operand.calc(datum));
   }
-
 
   protected _getJSChainableHelper(operandJS: string): string {
     throw runtimeAbstract();
@@ -2040,15 +2296,16 @@ export abstract class ChainableExpression extends Expression {
     return this._getJSChainableHelper(this.operand.getJS(datumVar));
   }
 
-
-  protected _getSQLChainableHelper(dialect: SQLDialect, operandSQL: string): string {
+  protected _getSQLChainableHelper(
+    dialect: SQLDialect,
+    operandSQL: string
+  ): string {
     throw runtimeAbstract();
   }
 
   public getSQL(dialect: SQLDialect): string {
     return this._getSQLChainableHelper(dialect, this.operand.getSQL(dialect));
   }
-
 
   public pushIntoExternal(): ExternalExpression | null {
     const { operand } = this;
@@ -2071,7 +2328,9 @@ export abstract class ChainableExpression extends Expression {
       return r(simpler.calc({}));
     }
 
-    const specialSimpler = (simpler as ChainableUnaryExpression).specialSimplify();
+    const specialSimpler = (
+      simpler as ChainableUnaryExpression
+    ).specialSimplify();
     if (specialSimpler === simpler) {
       simpler = specialSimpler.markSimple();
     } else {
@@ -2086,12 +2345,17 @@ export abstract class ChainableExpression extends Expression {
     return simpler;
   }
 
-
   public isNester(): boolean {
     return false;
   }
 
-  public _everyHelper(iter: BooleanExpressionIterator, thisArg: any, indexer: Indexer, depth: int, nestDiff: int): boolean {
+  public _everyHelper(
+    iter: BooleanExpressionIterator,
+    thisArg: any,
+    indexer: Indexer,
+    depth: int,
+    nestDiff: int
+  ): boolean {
     let pass = iter.call(thisArg, this, indexer.index, depth, nestDiff);
     if (pass != null) {
       return pass;
@@ -2101,36 +2365,58 @@ export abstract class ChainableExpression extends Expression {
     depth++;
 
     let operand = this.operand;
-    if (!operand._everyHelper(iter, thisArg, indexer, depth, nestDiff)) return false;
+    if (!operand._everyHelper(iter, thisArg, indexer, depth, nestDiff))
+      return false;
 
     let nestDiffNext = nestDiff + Number(this.isNester());
-    return this.getArgumentExpressions().every((ex) => ex._everyHelper(iter, thisArg, indexer, depth, nestDiffNext));
+    return this.getArgumentExpressions().every((ex) =>
+      ex._everyHelper(iter, thisArg, indexer, depth, nestDiffNext)
+    );
   }
 
-  public _substituteHelper(substitutionFn: SubstitutionFn, indexer: Indexer, depth: int, nestDiff: int, typeContext: DatasetFullType): ExpressionTypeContext {
-    let sub = substitutionFn.call(this, this, indexer.index, depth, nestDiff, typeContext);
+  public _substituteHelper(
+    substitutionFn: SubstitutionFn,
+    indexer: Indexer,
+    depth: int,
+    nestDiff: int,
+    typeContext: DatasetFullType
+  ): ExpressionTypeContext {
+    let sub = substitutionFn.call(
+      this,
+      this,
+      indexer.index,
+      depth,
+      nestDiff,
+      typeContext
+    );
     if (sub) {
       indexer.index += this.expressionCount();
       return {
         expression: sub,
-        typeContext: sub.updateTypeContextIfNeeded(typeContext)
+        typeContext: sub.updateTypeContextIfNeeded(typeContext),
       };
     } else {
       indexer.index++;
     }
     depth++;
 
-    const operandSubs = this.operand._substituteHelper(substitutionFn, indexer, depth, nestDiff, typeContext);
+    const operandSubs = this.operand._substituteHelper(
+      substitutionFn,
+      indexer,
+      depth,
+      nestDiff,
+      typeContext
+    );
     const updatedThis = this.changeOperand(operandSubs.expression);
 
     return {
       expression: updatedThis,
-      typeContext: updatedThis.updateTypeContextIfNeeded(operandSubs.typeContext)
+      typeContext: updatedThis.updateTypeContextIfNeeded(
+        operandSubs.typeContext
+      ),
     };
   }
-
 }
-
 
 export abstract class ChainableUnaryExpression extends ChainableExpression {
   static jsToValue(js: ExpressionJS): ExpressionValue {
@@ -2148,27 +2434,44 @@ export abstract class ChainableUnaryExpression extends ChainableExpression {
   }
 
   protected _checkExpressionTypes(...neededTypes: string[]) {
-    this._checkTypeAgainstTypes('expression', Set.unwrapSetType(this.expression.type), neededTypes);
+    this._checkTypeAgainstTypes(
+      "expression",
+      Set.unwrapSetType(this.expression.type),
+      neededTypes
+    );
   }
 
   protected _checkExpressionTypesStrict(...neededTypes: string[]) {
-    this._checkTypeAgainstTypes('expression', this.expression.type, neededTypes);
+    this._checkTypeAgainstTypes(
+      "expression",
+      this.expression.type,
+      neededTypes
+    );
   }
 
   protected _checkOperandExpressionTypesAlign() {
     let operandType = Set.unwrapSetType(this.operand.type);
     let expressionType = Set.unwrapSetType(this.expression.type);
-    if (!operandType || operandType === 'NULL' || !expressionType || expressionType === 'NULL' || operandType === expressionType) return;
-    throw new Error(`${this.op} must have matching types (are ${this.operand.type}, ${this.expression.type})`);
+    if (
+      !operandType ||
+      operandType === "NULL" ||
+      !expressionType ||
+      expressionType === "NULL" ||
+      operandType === expressionType
+    )
+      return;
+    throw new Error(
+      `${this.op} must have matching types (are ${this.operand.type}, ${this.expression.type})`
+    );
   }
 
   protected _bumpOperandExpressionToTime() {
-    if (this.expression.type === 'TIME' && this.operand.type === 'STRING') {
-      this.operand = this.operand.upgradeToType('TIME');
+    if (this.expression.type === "TIME" && this.operand.type === "STRING") {
+      this.operand = this.operand.upgradeToType("TIME");
     }
 
-    if (this.operand.type === 'TIME' && this.expression.type === 'STRING') {
-      this.expression = this.expression.upgradeToType('TIME');
+    if (this.operand.type === "TIME" && this.expression.type === "STRING") {
+      this.expression = this.expression.upgradeToType("TIME");
     }
   }
 
@@ -2190,16 +2493,18 @@ export abstract class ChainableUnaryExpression extends ChainableExpression {
 
   public toString(indent?: int): string {
     // ToDo: handle indent
-    return `${this.operand.toString(indent)}.${this.op}(${this._toStringParameters(indent).join(',')})`;
+    return `${this.operand.toString(indent)}.${
+      this.op
+    }(${this._toStringParameters(indent).join(",")})`;
   }
 
   public equals(other: ChainableUnaryExpression | undefined): boolean {
-    return super.equals(other) &&
-      this.expression.equals(other.expression);
+    return super.equals(other) && this.expression.equals(other.expression);
   }
 
   public changeExpression(expression: Expression): this {
-    if (this.expression === expression || this.expression.equals(expression)) return this;
+    if (this.expression === expression || this.expression.equals(expression))
+      return this;
 
     let value = this.valueOf();
     value.expression = expression;
@@ -2207,34 +2512,52 @@ export abstract class ChainableUnaryExpression extends ChainableExpression {
     return Expression.fromValue(value) as any;
   }
 
-  protected _calcChainableUnaryHelper(operandValue: any, expressionValue: any): PlywoodValue {
+  protected _calcChainableUnaryHelper(
+    operandValue: any,
+    expressionValue: any
+  ): PlywoodValue {
     throw runtimeAbstract();
   }
 
   public fullyDefined(): boolean {
-    return this.operand.isOp('literal') && this.expression.isOp('literal');
+    return this.operand.isOp("literal") && this.expression.isOp("literal");
   }
 
   public calc(datum: Datum): PlywoodValue {
-    return this._calcChainableUnaryHelper(this.operand.calc(datum), this.isNester() ? null : this.expression.calc(datum));
+    return this._calcChainableUnaryHelper(
+      this.operand.calc(datum),
+      this.isNester() ? null : this.expression.calc(datum)
+    );
   }
 
-
-  protected _getJSChainableUnaryHelper(operandJS: string, expressionJS: string): string {
+  protected _getJSChainableUnaryHelper(
+    operandJS: string,
+    expressionJS: string
+  ): string {
     throw runtimeAbstract();
   }
 
   public getJS(datumVar: string): string {
-    return this._getJSChainableUnaryHelper(this.operand.getJS(datumVar), this.expression.getJS(datumVar));
+    return this._getJSChainableUnaryHelper(
+      this.operand.getJS(datumVar),
+      this.expression.getJS(datumVar)
+    );
   }
 
-
-  protected _getSQLChainableUnaryHelper(dialect: SQLDialect, operandSQL: string, expressionSQL: string): string {
+  protected _getSQLChainableUnaryHelper(
+    dialect: SQLDialect,
+    operandSQL: string,
+    expressionSQL: string
+  ): string {
     throw runtimeAbstract();
   }
 
   public getSQL(dialect: SQLDialect): string {
-    return this._getSQLChainableUnaryHelper(dialect, this.operand.getSQL(dialect), this.expression.getSQL(dialect));
+    return this._getSQLChainableUnaryHelper(
+      dialect,
+      this.operand.getSQL(dialect),
+      this.expression.getSQL(dialect)
+    );
   }
 
   public getExpressionList(): Expression[] {
@@ -2266,9 +2589,9 @@ export abstract class ChainableUnaryExpression extends ChainableExpression {
     return new MyClass({
       operand: new MyClass({
         operand: operand,
-        expression: (expression as ChainableUnaryExpression).operand
+        expression: (expression as ChainableUnaryExpression).operand,
       }),
-      expression: (expression as ChainableUnaryExpression).expression
+      expression: (expression as ChainableUnaryExpression).expression,
     });
   }
 
@@ -2280,13 +2603,13 @@ export abstract class ChainableUnaryExpression extends ChainableExpression {
 
     const simpleExpression = new MyClass({
       operand: (operand as ChainableUnaryExpression).expression,
-      expression: expression
+      expression: expression,
     }).simplify();
 
     if (simpleExpression instanceof LiteralExpression) {
       return new MyClass({
         operand: (operand as ChainableUnaryExpression).operand,
-        expression: simpleExpression
+        expression: simpleExpression,
       }).simplify();
     } else {
       return null;
@@ -2309,7 +2632,8 @@ export abstract class ChainableUnaryExpression extends ChainableExpression {
 
     let simpleOperand = this.operand.simplify();
     let simpleExpression = this.expression.simplify();
-    let simpler: Expression = this.changeOperand(simpleOperand).changeExpression(simpleExpression);
+    let simpler: Expression =
+      this.changeOperand(simpleOperand).changeExpression(simpleExpression);
     if (simpler.fullyDefined()) return r(simpler.calc({}));
 
     if (this.isCommutative() && simpleOperand instanceof LiteralExpression) {
@@ -2354,27 +2678,50 @@ export abstract class ChainableUnaryExpression extends ChainableExpression {
     return [this.expression];
   }
 
-  public _substituteHelper(substitutionFn: SubstitutionFn, indexer: Indexer, depth: int, nestDiff: int, typeContext: DatasetFullType): ExpressionTypeContext {
+  public _substituteHelper(
+    substitutionFn: SubstitutionFn,
+    indexer: Indexer,
+    depth: int,
+    nestDiff: int,
+    typeContext: DatasetFullType
+  ): ExpressionTypeContext {
     let sub = substitutionFn.call(this, this, indexer.index, depth, nestDiff);
     if (sub) {
       indexer.index += this.expressionCount();
       return {
         expression: sub,
-        typeContext: sub.updateTypeContextIfNeeded(typeContext)
+        typeContext: sub.updateTypeContextIfNeeded(typeContext),
       };
     } else {
       indexer.index++;
     }
     depth++;
 
-    const operandSubs = this.operand._substituteHelper(substitutionFn, indexer, depth, nestDiff, typeContext);
+    const operandSubs = this.operand._substituteHelper(
+      substitutionFn,
+      indexer,
+      depth,
+      nestDiff,
+      typeContext
+    );
     const nestDiffNext = nestDiff + Number(this.isNester());
-    const expressionSubs = this.expression._substituteHelper(substitutionFn, indexer, depth, nestDiffNext, this.isNester() ? operandSubs.typeContext : typeContext);
-    const updatedThis = this.changeOperand(operandSubs.expression).changeExpression(expressionSubs.expression);
+    const expressionSubs = this.expression._substituteHelper(
+      substitutionFn,
+      indexer,
+      depth,
+      nestDiffNext,
+      this.isNester() ? operandSubs.typeContext : typeContext
+    );
+    const updatedThis = this.changeOperand(
+      operandSubs.expression
+    ).changeExpression(expressionSubs.expression);
 
     return {
       expression: updatedThis,
-      typeContext: updatedThis.updateTypeContextIfNeeded(operandSubs.typeContext, expressionSubs.typeContext)
+      typeContext: updatedThis.updateTypeContextIfNeeded(
+        operandSubs.typeContext,
+        expressionSubs.typeContext
+      ),
     };
   }
 }
