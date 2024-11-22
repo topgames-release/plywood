@@ -59,8 +59,14 @@ export function concurrentLimitRequesterFactory<T>(
 
     const stream = requester(queueItem.request);
 
-    stream.on("error", () => {
-      clearQueueAndError(queueItem.stream);
+    stream.on("error", (err: Error) => {
+      console.error(
+        `${formatDateTimeForLog(
+          new Date()
+        )}  concurrent Limit Requester Stream error occurred:`,
+        err.message
+      );
+      clearQueueAndError(queueItem.stream, err);
     });
 
     stream.on("end", () => {
@@ -70,7 +76,10 @@ export function concurrentLimitRequesterFactory<T>(
       if (elapsedTime > 4 * 60 * 1000) {
         // If the request took more than 4 minutes, clear the queue and return an error
         console.log(`${formatDateTimeForLog(new Date())} NodeJS Query timeout`);
-        clearQueueAndError(queueItem.stream);
+        clearQueueAndError(
+          queueItem.stream,
+          new Error("The subquery timeout exceeded 4 minutes.")
+        );
       } else {
         requestFinished();
       }
@@ -79,7 +88,7 @@ export function concurrentLimitRequesterFactory<T>(
     pipeWithError(stream, queueItem.stream);
   }
 
-  function clearQueueAndError(stream: PassThrough) {
+  function clearQueueAndError(stream: PassThrough, err?: Error) {
     outstandingRequests--;
     isErrorOccurred = true;
     while (requestQueue.length) {
@@ -89,7 +98,11 @@ export function concurrentLimitRequesterFactory<T>(
       }
     }
     requestQueue = [];
-    stream.emit("error", new Error("NodeJS Query timout"));
+    console.error(
+      `${formatDateTimeForLog(new Date())} clear queue and error details:`,
+      err.message || err
+    );
+    stream.emit("error", err);
     isErrorOccurred = false;
   }
 
