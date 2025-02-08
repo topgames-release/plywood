@@ -50,6 +50,7 @@ import { External, ExternalJS } from "../external/baseExternal";
 import { promiseWhile } from "../helper/promiseWhile";
 import {
   deduplicateSort,
+  formatDateTimeForLog,
   pipeWithError,
   repeat,
   shallowCopy,
@@ -121,6 +122,7 @@ import { TimeRangeExpression } from "./timeRangeExpression";
 import { TimeShiftExpression } from "./timeShiftExpression";
 import { TransformCaseExpression } from "./transformCaseExpression";
 
+declare const process: any;
 export interface ComputeOptions extends Environment {
   customOptions?: any;
   rawQueries?: any[];
@@ -128,6 +130,7 @@ export interface ComputeOptions extends Environment {
   maxRows?: number;
   maxComputeCycles?: number;
   concurrentQueryLimit?: number;
+  timeout?: number;
   beforePerSplitRequestFn?: (external: External) => void;
   afterSplitRequestFn?: (queriesMade: number) => void;
 }
@@ -2091,10 +2094,14 @@ export abstract class Expression
       maxComputeCycles = 5,
       maxQueries = 500,
       maxRows,
+      timeout,
       concurrentQueryLimit = Infinity,
       beforePerSplitRequestFn = function () {},
       afterSplitRequestFn = function () {},
     } = options;
+
+    // 记录开始时间（毫秒）
+    const startTime = Date.now();
 
     let ex: Expression = this;
     let readyExternals = ex.getReadyExternals(concurrentQueryLimit);
@@ -2102,16 +2109,42 @@ export abstract class Expression
     let computeCycles = 0;
     let queriesMade = 0;
     return promiseWhile(
-      () =>
-        Object.keys(readyExternals).length > 0 &&
-        computeCycles < maxComputeCycles &&
-        queriesMade < maxQueries,
+      () => {
+        // 在每次循环前检查是否超时
+        if (typeof timeout === "number" && Date.now() - startTime > timeout) {
+          return false;
+        }
+        return (
+          Object.keys(readyExternals).length > 0 &&
+          computeCycles < maxComputeCycles &&
+          queriesMade < maxQueries
+        );
+      },
       async () => {
         const readyExternalsFilled =
           await fillExpressionExternalAlterationAsync(
             readyExternals,
             (external, terminal) => {
               if (queriesMade < maxQueries) {
+                if (
+                  typeof timeout === "number" &&
+                  Date.now() - startTime > timeout
+                ) {
+                  console.error(
+                    `${formatDateTimeForLog(new Date())} 进程ID:${
+                      process.env.pm_id
+                    } Plywood Operation timed out, exceeded ${
+                      timeout / 1000
+                    } seconds customOptions->${JSON.stringify(customOptions)}`
+                  );
+                  return Promise.reject(
+                    new Error(
+                      `Plywood Operation timed out, exceeded ${
+                        timeout / 1000
+                      } seconds`
+                    )
+                  );
+                }
                 queriesMade++;
                 beforePerSplitRequestFn(external);
                 // todo: 3
@@ -2134,6 +2167,21 @@ export abstract class Expression
         computeCycles++;
       }
     ).then(() => {
+      // 最后再检查一次是否超时
+      if (typeof timeout === "number" && Date.now() - startTime > timeout) {
+        console.error(
+          `${formatDateTimeForLog(new Date())} 进程ID:${
+            process.env.pm_id
+          } Plywood Operation timed out, exceeded ${
+            timeout / 1000
+          } seconds customOptions->${JSON.stringify(customOptions)}`
+        );
+        return Promise.reject(
+          new Error(
+            `Plywood Operation timed out, exceeded ${timeout / 1000} seconds`
+          )
+        );
+      }
       if (!ex.isOp("literal"))
         throw new Error(`something went wrong, did not get literal: ${ex}`);
       return ex.getLiteralValue();
