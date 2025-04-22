@@ -54,6 +54,8 @@ import {
   pipeWithError,
   repeat,
   shallowCopy,
+  trimDatasetAlterations,
+  countTerminalAlterationsTotal,
 } from "../helper/utils";
 import {
   DatasetFullType,
@@ -937,6 +939,49 @@ export abstract class Expression
         return r(alteration.result);
       }
     }).simplify();
+  }
+
+  public applyReadyExternalsByFillAlteration(
+    alterations: ExpressionExternalAlteration,
+    filledExprAlters: ExpressionExternalAlteration
+  ): Expression {
+    return this.substitute((ex, index) => {
+      let alteration = alterations[index];
+      let filledAlteration = filledExprAlters[index];
+      if (!alteration) return null;
+      if (Array.isArray(alteration)) {
+        return r(
+          (
+            ex.getLiteralValue() as Dataset
+          ).applyReadyExternalsByFillAlterationSync(
+            alteration,
+            filledAlteration as DatasetExternalAlterations,
+            []
+          )
+        );
+      } else {
+        return r(
+          (filledAlteration as ExpressionExternalAlterationSimple).result
+        );
+      }
+    }).simplify();
+  }
+
+  public async applyReadyExternalsByFillAlterationAsync(
+    alterations: ExpressionExternalAlteration,
+    filledExprAlters: ExpressionExternalAlteration
+  ): Promise<void> {
+    let index = 0;
+    let alteration = alterations[index];
+    let filledAlteration = filledExprAlters[index];
+    if (Array.isArray(alteration)) {
+      let dataset = this.getLiteralValue();
+      await dataset.applyReadyExternalsByFillAlterationAsync(
+        alteration,
+        filledAlteration,
+        []
+      );
+    }
   }
 
   private _headExternal(): any {
@@ -1945,6 +1990,16 @@ export abstract class Expression
       readyExpression = readyExpression.unsuppress();
     }
 
+    if (!options.customOptions) {
+      options.customOptions = {};
+    }
+
+    options.customOptions.druidQuery = {
+      virtualColumns: [],
+      dimensions: [],
+      filter: {},
+    };
+
     return readyExpression._computeResolvedSimulate(options, []);
   }
 
@@ -1979,6 +2034,7 @@ export abstract class Expression
       maxQueries = 500,
       maxRows,
       concurrentQueryLimit = Infinity,
+      customOptions = {},
     } = options;
 
     let ex: Expression = this;
@@ -1996,7 +2052,12 @@ export abstract class Expression
       fillExpressionExternalAlteration(readyExternals, (external, terminal) => {
         if (queries < maxQueries) {
           queries++;
-          return external.simulateValue(terminal, simulatedQueryGroup);
+          return external.simulateValue(
+            terminal,
+            simulatedQueryGroup,
+            null,
+            customOptions
+          );
         } else {
           queries++;
           return null; // Query limit reached, don't do any more queries.
@@ -2037,7 +2098,11 @@ export abstract class Expression
           // Top level externals need to be unsuppressed
           readyExpression = readyExpression.unsuppress();
         }
-        // todo: 2
+
+        const { customOptions } = options;
+        if (customOptions.unionCompute) {
+          return readyExpression._computeResolvedUnion(options);
+        }
         return readyExpression._computeResolved(options);
       });
   }
@@ -2164,6 +2229,127 @@ export abstract class Expression
           ex = r(literalValue.depthFirstTrimTo(maxRows));
         }
         readyExternals = ex.getReadyExternals(concurrentQueryLimit);
+        computeCycles++;
+      }
+    ).then(() => {
+      // 最后再检查一次是否超时
+      if (typeof timeout === "number" && Date.now() - startTime > timeout) {
+        console.error(
+          `${formatDateTimeForLog(new Date())} 进程ID:${
+            process.env.pm_id
+          } Plywood Operation timed out, exceeded ${
+            timeout / 1000
+          } seconds customOptions->${JSON.stringify(customOptions)}`
+        );
+        return Promise.reject(
+          new Error(
+            `Plywood Operation timed out, exceeded ${timeout / 1000} seconds`
+          )
+        );
+      }
+      if (!ex.isOp("literal"))
+        throw new Error(`something went wrong, did not get literal: ${ex}`);
+      return ex.getLiteralValue();
+    });
+  }
+
+  private _computeResolvedUnion(
+    options: ComputeOptions
+  ): Promise<PlywoodValue> {
+    const {
+      customOptions = null,
+      rawQueries,
+      maxComputeCycles = 5,
+      maxQueries = 500,
+      maxRows,
+      timeout,
+      concurrentQueryLimit = Infinity,
+      beforePerSplitRequestFn = function () {},
+      afterSplitRequestFn = function () {},
+    } = options;
+
+    // 记录开始时间（毫秒）
+    const startTime = Date.now();
+
+    let ex: Expression = this;
+
+    console.time("ex.getReadyExternals");
+    let readyExternals = ex.getReadyExternals(concurrentQueryLimit);
+    console.timeEnd("ex.getReadyExternals");
+
+    let computeCycles = 0;
+    let queriesMade = 0;
+    return promiseWhile(
+      () => {
+        // 在每次循环前检查是否超时
+        if (typeof timeout === "number" && Date.now() - startTime > timeout) {
+          return false;
+        }
+        return (
+          Object.keys(readyExternals).length > 0 &&
+          computeCycles < maxComputeCycles &&
+          queriesMade < maxQueries
+        );
+      },
+      async () => {
+        const readyExternalsFilled =
+          await fillExpressionExternalAlterationAsync(
+            readyExternals,
+            (external, terminal) => {
+              if (queriesMade < maxQueries) {
+                if (
+                  typeof timeout === "number" &&
+                  Date.now() - startTime > timeout
+                ) {
+                  console.error(
+                    `${formatDateTimeForLog(new Date())} 进程ID:${
+                      process.env.pm_id
+                    } Plywood Operation timed out, exceeded ${
+                      timeout / 1000
+                    } seconds customOptions->${JSON.stringify(customOptions)}`
+                  );
+                  return Promise.reject(
+                    new Error(
+                      `Plywood Operation timed out, exceeded ${
+                        timeout / 1000
+                      } seconds`
+                    )
+                  );
+                }
+                queriesMade++;
+                beforePerSplitRequestFn(external);
+                // todo: 3
+                return external.queryValue(terminal, rawQueries, customOptions);
+              } else {
+                queriesMade++;
+                return Promise.reject(new Error("Query limit exceeded."));
+                // return Promise.resolve(null); // Query limit reached, don't do any more queries.
+              }
+            }
+          );
+
+        afterSplitRequestFn(queriesMade);
+        if (computeCycles > 0) {
+          let readyExternalsFilledOrigin =
+            ex.getReadyExternals(concurrentQueryLimit);
+          console.time("ex.applyReadyExternalsByFillAlteration");
+          ex.applyReadyExternalsByFillAlteration(
+            readyExternalsFilledOrigin,
+            readyExternalsFilled
+          );
+          console.timeEnd("ex.applyReadyExternalsByFillAlteration");
+          ex = ex.applyReadyExternals(readyExternalsFilledOrigin);
+        } else {
+          ex = ex.applyReadyExternals(readyExternalsFilled);
+        }
+        const literalValue = ex.getLiteralValue();
+        if (maxRows && literalValue instanceof Dataset) {
+          ex = r(literalValue.depthFirstTrimTo(maxRows));
+        }
+        readyExternals = ex.getReadyExternals(concurrentQueryLimit);
+        let batchSize = countTerminalAlterationsTotal(readyExternals);
+        customOptions.druidQuery.batchSize = batchSize;
+        readyExternals = trimDatasetAlterations(readyExternals);
         computeCycles++;
       }
     ).then(() => {

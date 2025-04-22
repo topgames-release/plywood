@@ -187,3 +187,47 @@ export function formatDateTimeForLog(date: Date) {
 
   return formattedDateTime;
 }
+
+export function trimDatasetAlterations(data: any) {
+  function processNode(node: any) {
+    if (!node || typeof node !== "object") return;
+    if (
+      Array.isArray(node.datasetAlterations) &&
+      node.datasetAlterations.length > 0
+    ) {
+      node.datasetAlterations = [node.datasetAlterations[0]];
+      processNode(node.datasetAlterations[0]);
+    }
+  }
+
+  for (const key in data) {
+    if (Array.isArray(data[key])) {
+      data[key].forEach((item: any) => processNode(item));
+    }
+  }
+
+  return data;
+}
+
+export function countTerminalAlterationsTotal(data: any): number {
+  // 在文件末尾添加计算函数和结果输出
+  function countTerminalAlterations(node: any) {
+    if (!node.datasetAlterations) return 0;
+
+    let count = 0;
+    for (const alteration of node.datasetAlterations) {
+      if (alteration.terminal || alteration.expressionAlterations) {
+        count++;
+      } else {
+        count += countTerminalAlterations(alteration);
+      }
+    }
+    return count;
+  }
+
+  const total = Object.values(data)
+    .flatMap((group: any) => group)
+    .reduce((sum, node) => sum + countTerminalAlterations(node), 0);
+
+  return total;
+}

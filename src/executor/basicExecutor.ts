@@ -37,7 +37,18 @@ export function basicExecutorFactory(
       opt.customOptions = {};
     }
     opt.customOptions.dataCubeName = dataCubeName;
-
+    opt.customOptions.druidQuery = {
+      dimensionInflaters: [],
+      maxQueries: opt.maxQueries,
+      batchSize: 1,
+      intervals: "",
+      virtualColumns: [],
+      dimensions: [],
+      filter: {},
+      limitSpec: {
+        limit: 1,
+      },
+    };
     return ex.compute(datasets, opt);
   };
 }
