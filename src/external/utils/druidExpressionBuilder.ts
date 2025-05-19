@@ -227,7 +227,7 @@ export class DruidExpressionBuilder {
         this.checkDruid11('timestamp_floor');
         return `timestamp_floor(${ex1},'${
           expression.duration
-        }','1970-02-01T00Z',${DruidExpressionBuilder.escapeLiteral(
+        }','2006-01-01T00Z',${DruidExpressionBuilder.escapeLiteral(
           expression.timezone.toString()
         )})`;
       } else if (expression instanceof TimeShiftExpression) {
