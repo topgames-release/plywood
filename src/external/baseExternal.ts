@@ -1708,8 +1708,7 @@ export abstract class External {
   public simulateValue(
     lastNode: boolean,
     simulatedQueries: any[],
-    externalForNext: External = null,
-    customOptions: any
+    externalForNext: External = null
   ): PlywoodValue | TotalContainer {
     const { mode } = this;
 
@@ -1720,12 +1719,11 @@ export abstract class External {
       return delegate.simulateValue(
         lastNode,
         simulatedQueries,
-        externalForNext,
-        customOptions
+        externalForNext
       );
     }
 
-    simulatedQueries.push(this.getQueryAndPostTransform(customOptions).query);
+    simulatedQueries.push(this.getQueryAndPostTransform().query);
 
     if (mode === "value") {
       let valueExpression = this.valueExpression;
@@ -1772,9 +1770,7 @@ export abstract class External {
     });
   }
 
-  public getQueryAndPostTransform(
-    customOptions?: any
-  ): QueryAndPostTransform<any> {
+  public getQueryAndPostTransform(): QueryAndPostTransform<any> {
     throw new Error("can not call getQueryAndPostTransform directly");
   }
 
@@ -1813,7 +1809,7 @@ export abstract class External {
     let queryAndPostTransform: QueryAndPostTransform<any>;
     try {
       // todo: 6
-      queryAndPostTransform = this.getQueryAndPostTransform(customOptions);
+      queryAndPostTransform = this.getQueryAndPostTransform();
     } catch (e) {
       return new ReadableError(e);
     }

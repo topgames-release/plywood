@@ -108,12 +108,6 @@ function simpleJSONEqual(a: any, b: any): boolean {
   return JSON.stringify(a) === JSON.stringify(b); // ToDo: fill this in;
 }
 
-function isDimensionObject(
-  dimension: Druid.DimensionSpec
-): dimension is Druid.DimensionSpecFull {
-  return typeof dimension === "object" && dimension !== null;
-}
-
 export interface GranularityInflater {
   granularity: Druid.Granularity;
   inflater: Inflater;
@@ -903,7 +897,7 @@ export class DruidExternal extends External {
     return dimensionInflater;
   }
 
-  public splitToDruid(split: SplitExpression, customOptions: any): DruidSplit {
+  public splitToDruid(split: SplitExpression): DruidSplit {
     let leftoverHavingFilter = this.havingFilter;
     let selectedAttributes = this.getSelectedAttributes();
 
@@ -990,38 +984,7 @@ export class DruidExternal extends External {
     );
     leftoverHavingFilter = dimensionInflater.having;
 
-    if (splitExpression instanceof TimeBucketExpression) {
-      customOptions.druidQuery.dimensionInflaters.push(dimensionInflater);
-    }
-
-    let allInflaters = [];
-    const {
-      druidQuery: { dimensionInflaters },
-    } = customOptions;
-    if (
-      customOptions.unionCompute &&
-      dimensionInflaters &&
-      dimensionInflaters.length > 0
-    ) {
-      allInflaters = dimensionInflaters
-        .filter((previousDimensionInflater: DimensionInflater) => {
-          return (
-            dimensionInflater.dimension &&
-            previousDimensionInflater.dimension &&
-            isDimensionObject(previousDimensionInflater.dimension) &&
-            isDimensionObject(dimensionInflater.dimension) &&
-            previousDimensionInflater.dimension.dimension !==
-              dimensionInflater.dimension.dimension
-          );
-        })
-        .map(
-          (previousDimensionInflater: DimensionInflater) =>
-            previousDimensionInflater.inflater
-        )
-        .filter(Boolean);
-    }
-    allInflaters.push(dimensionInflater.inflater);
-    let inflaters = allInflaters.filter(Boolean);
+    let inflaters = [dimensionInflater.inflater].filter(Boolean);
     if (
       leftoverHavingFilter.equals(Expression.TRUE) && // There is no leftover having filter
       (this.limit || split.maxBucketNumber() < 1000) && // There is a limit (or the split range is limited)
@@ -1112,9 +1075,7 @@ export class DruidExternal extends External {
     };
   }
 
-  public nestedGroupByIfNeeded(
-    customOptions: any
-  ): QueryAndPostTransform<Druid.Query> | null {
+  public nestedGroupByIfNeeded(): QueryAndPostTransform<Druid.Query> | null {
     interface ParsedResplitAgg {
       resplitAgg: ChainableExpression;
       resplitApply: ApplyExpression;
@@ -1333,8 +1294,7 @@ export class DruidExternal extends External {
     innerValue.limit = null;
     innerValue.sort = null;
     const innerExternal = new DruidExternal(innerValue);
-    const innerQuery =
-      innerExternal.getQueryAndPostTransform(customOptions).query;
+    const innerQuery = innerExternal.getQueryAndPostTransform().query;
     delete innerQuery.context;
 
     // OUTER
@@ -1352,8 +1312,7 @@ export class DruidExternal extends External {
     const outerExternal = new DruidExternal(outerValue);
 
     // Put it together
-    let outerQueryAndPostTransform =
-      outerExternal.getQueryAndPostTransform(customOptions);
+    let outerQueryAndPostTransform = outerExternal.getQueryAndPostTransform();
     outerQueryAndPostTransform.query.dataSource = {
       type: "query",
       query: innerQuery,
@@ -1361,36 +1320,7 @@ export class DruidExternal extends External {
     return outerQueryAndPostTransform;
   }
 
-  // 通用的合并和去重函数
-  public mergeAndDeduplicate(
-    objectArray: object[],
-    keyExtractor: (item: any) => string
-  ) {
-    const seen: { [key: string]: boolean } = {};
-    return objectArray.filter((item) => {
-      const key = keyExtractor(item);
-      if (seen[key]) {
-        return false;
-      }
-      seen[key] = true;
-      return true;
-    });
-  }
-
-  public mergeAndDeduplicateDimensions(dimensions: any) {
-    return this.mergeAndDeduplicate(
-      dimensions,
-      (dimension) => dimension.outputName
-    );
-  }
-
-  public mergeAndDeduplicateVirtualColumns(virtualColumns: any) {
-    return this.mergeAndDeduplicate(virtualColumns, (col) => col.name);
-  }
-
-  public getQueryAndPostTransform(
-    customOptions: any
-  ): QueryAndPostTransform<Druid.Query> {
+  public getQueryAndPostTransform(): QueryAndPostTransform<Druid.Query> {
     const { mode, applies, sort, limit, context, querySelection } = this;
 
     if (querySelection !== "group-by-only") {
@@ -1603,7 +1533,7 @@ export class DruidExternal extends External {
         };
 
       case "value":
-        const nestedGroupByValue = this.nestedGroupByIfNeeded(customOptions);
+        const nestedGroupByValue = this.nestedGroupByIfNeeded();
         if (nestedGroupByValue) return nestedGroupByValue;
 
         aggregationsAndPostAggregations = new DruidAggregationBuilder(
@@ -1622,8 +1552,7 @@ export class DruidExternal extends External {
           druidQuery.queryType = "groupBy";
           druidQuery.dimensions = [];
         }
-        customOptions.druidQuery.filter = druidQuery.filter;
-        customOptions.druidQuery.intervals = druidQuery.intervals;
+
         return {
           query: druidQuery,
           context: requesterContext,
@@ -1631,7 +1560,7 @@ export class DruidExternal extends External {
         };
 
       case "total":
-        const nestedGroupByTotal = this.nestedGroupByIfNeeded(customOptions);
+        const nestedGroupByTotal = this.nestedGroupByIfNeeded();
         if (nestedGroupByTotal) return nestedGroupByTotal;
 
         aggregationsAndPostAggregations = new DruidAggregationBuilder(
@@ -1651,8 +1580,6 @@ export class DruidExternal extends External {
           druidQuery.dimensions = [];
         }
 
-        customOptions.druidQuery.filter = druidQuery.filter;
-        customOptions.druidQuery.intervals = druidQuery.intervals;
         return {
           query: druidQuery,
           context: requesterContext,
@@ -1665,39 +1592,18 @@ export class DruidExternal extends External {
         };
 
       case "split":
-        const nestedGroupBy = this.nestedGroupByIfNeeded(customOptions);
+        const nestedGroupBy = this.nestedGroupByIfNeeded();
         if (nestedGroupBy) return nestedGroupBy;
 
         // Split
         let split = this.getQuerySplit();
-        let splitSpec = this.splitToDruid(split, customOptions);
+        let splitSpec = this.splitToDruid(split);
         druidQuery.queryType = splitSpec.queryType;
         druidQuery.granularity = splitSpec.granularity;
-        if (splitSpec.virtualColumns && splitSpec.virtualColumns.length) {
+        if (splitSpec.virtualColumns && splitSpec.virtualColumns.length)
           druidQuery.virtualColumns = splitSpec.virtualColumns;
-          customOptions.druidQuery.virtualColumns =
-            this.mergeAndDeduplicateVirtualColumns([
-              // @ts-ignore
-              ...customOptions.druidQuery.virtualColumns,
-              ...splitSpec.virtualColumns,
-            ]);
-        }
-        if (splitSpec.dimension) {
-          druidQuery.dimension = splitSpec.dimension;
-          customOptions.druidQuery.dimensions =
-            this.mergeAndDeduplicateDimensions([
-              ...customOptions.druidQuery.dimensions,
-              splitSpec.dimension,
-            ]);
-        }
-        if (splitSpec.dimensions) {
-          druidQuery.dimensions = splitSpec.dimensions;
-          customOptions.druidQuery.dimensions =
-            this.mergeAndDeduplicateDimensions([
-              ...customOptions.druidQuery.dimensions,
-              ...splitSpec.dimensions,
-            ]);
-        }
+        if (splitSpec.dimension) druidQuery.dimension = splitSpec.dimension;
+        if (splitSpec.dimensions) druidQuery.dimensions = splitSpec.dimensions;
         let leftoverHavingFilter = splitSpec.leftoverHavingFilter;
         let timestampLabel = splitSpec.timestampLabel;
         requesterContext.timestamp = timestampLabel;
@@ -1794,14 +1700,6 @@ export class DruidExternal extends External {
                 };
               }
               druidQuery.limitSpec.limit = limit.value;
-              let newLimit = customOptions.druidQuery.batchSize * limit.value;
-              if (newLimit > customOptions.druidQuery.maxQueries) {
-                newLimit = customOptions.druidQuery.maxQueries;
-              }
-              customOptions.druidQuery.limitSpec = {
-                ...druidQuery.limitSpec,
-                limit: newLimit,
-              };
             }
             if (!leftoverHavingFilter.equals(Expression.TRUE)) {
               druidQuery.having = new DruidHavingFilterBuilder(
@@ -1809,59 +1707,6 @@ export class DruidExternal extends External {
               ).filterToHavingFilter(leftoverHavingFilter);
             }
             break;
-        }
-
-        if (customOptions.unionCompute) {
-          const { dimensions, filter, limitSpec, virtualColumns, intervals } =
-            customOptions.druidQuery;
-          let unionQuery: any = {
-            ...druidQuery,
-            intervals,
-            dimensions,
-            filter,
-            limitSpec,
-            virtualColumns,
-          };
-          if (
-            unionQuery.queryType === "topN" &&
-            unionQuery.dimension &&
-            unionQuery.dimensions
-          ) {
-            if (unionQuery.dimensions.length > 1) {
-              unionQuery.queryType = "groupBy";
-              delete unionQuery.dimension;
-              // topN 查询的 threshold 属性在 groupBy 中对应 limitSpec.limit
-              if (
-                unionQuery.threshold &&
-                (!unionQuery.limitSpec || !unionQuery.limitSpec.limit)
-              ) {
-                unionQuery.limitSpec = unionQuery.limitSpec || {
-                  type: "default",
-                  columns: [],
-                };
-                unionQuery.limitSpec.limit = unionQuery.threshold;
-                delete unionQuery.threshold;
-              }
-            } else {
-              unionQuery = {
-                ...druidQuery,
-              };
-            }
-          } else {
-            unionQuery = {
-              ...druidQuery,
-              intervals,
-              dimensions,
-              filter,
-              limitSpec,
-              virtualColumns,
-            };
-          }
-          return {
-            query: unionQuery,
-            context: requesterContext,
-            postTransform: postTransform,
-          };
         }
 
         return {
