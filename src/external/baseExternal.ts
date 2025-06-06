@@ -749,6 +749,12 @@ export abstract class External {
     if (typeof query === "object") {
       query.source = "TopBI";
       query.subSource = customOptions.dataCubeName;
+      if (customOptions && customOptions.traceId) {
+        if (!query.context) {
+          query.context = {};
+        }
+        query.context.traceId = customOptions.traceId;
+      }
     }
 
     if (next) {
