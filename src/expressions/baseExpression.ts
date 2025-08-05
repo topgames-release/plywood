@@ -2277,6 +2277,15 @@ export abstract class Expression
     let readyExternals = ex.getReadyExternals(concurrentQueryLimit);
     console.timeEnd("ex.getReadyExternals");
 
+    // 检查是否可以使用 subtotalsSpec 优化
+    if (customOptions.useSubtotalsSpec) {
+      console.log("使用 subtotalsSpec 优化");
+      return this._computeResolvedUnionWithSubtotalsSpec(
+        options,
+        readyExternals
+      );
+    }
+
     let computeCycles = 0;
     let queriesMade = 0;
     return promiseWhile(
@@ -2292,6 +2301,31 @@ export abstract class Expression
         );
       },
       async () => {
+        // 在每次循环开始时检查是否可以使用 subtotalsSpec 优化
+        if (
+          this._canUseSubtotalsSpecOptimization(readyExternals, customOptions)
+        ) {
+          console.log("在循环中检测到多维度 split，使用 subtotalsSpec 优化");
+
+          // 设置 subtotalsSpec 优化标志
+          customOptions.useSubtotalsSpec = true;
+
+          // 执行优化的单次查询
+          const readyExternalsFilled =
+            await fillExpressionExternalAlterationAsync(
+              readyExternals,
+              (external, terminal) => {
+                queriesMade++;
+                beforePerSplitRequestFn(external);
+                return external.queryValue(terminal, rawQueries, customOptions);
+              }
+            );
+
+          // 应用结果并返回
+          ex = ex.applyReadyExternals(readyExternalsFilled);
+          return ex.getLiteralValue();
+        }
+
         const readyExternalsFilled =
           await fillExpressionExternalAlterationAsync(
             readyExternals,
@@ -2372,6 +2406,90 @@ export abstract class Expression
         throw new Error(`something went wrong, did not get literal: ${ex}`);
       return ex.getLiteralValue();
     });
+  }
+
+  /**
+   * 检查是否可以使用 subtotalsSpec 优化
+   */
+  private _canUseSubtotalsSpecOptimization(
+    readyExternals: ExpressionExternalAlteration,
+    customOptions: any
+  ): boolean {
+    // 检查是否有 DruidExternal 且支持 groupBy 查询
+    if (!customOptions || !customOptions.druidQuery) return false;
+
+    // 检查 subtotalsSpec 优化条件
+
+    // 递归检查嵌套的 DatasetExternalAlterations 结构
+    const checkForMultiSplit = (alterations: any): boolean => {
+      if (!alterations) return false;
+
+      // 如果是数组，检查每个元素
+      if (Array.isArray(alterations)) {
+        return alterations.some((alt) => {
+          // 检查当前层级是否有 external
+          if (
+            alt.external &&
+            alt.external.constructor.name === "DruidExternal" &&
+            alt.external.split
+          ) {
+            return alt.external.split.isMultiSplit();
+          }
+
+          // 递归检查嵌套的 datasetAlterations
+          if (alt.datasetAlterations) {
+            return checkForMultiSplit(alt.datasetAlterations);
+          }
+
+          return false;
+        });
+      }
+
+      // 如果是单个对象
+      if (
+        alterations.external &&
+        alterations.external.constructor.name === "DruidExternal" &&
+        alterations.external.split
+      ) {
+        return alterations.external.split.isMultiSplit();
+      }
+
+      return false;
+    };
+
+    // 检查是否有多个 split 维度
+    const hasMultipleSplits = Object.keys(readyExternals).some((key) => {
+      const alteration = readyExternals[key];
+      return checkForMultiSplit(alteration);
+    });
+
+    return hasMultipleSplits;
+  }
+
+  /**
+   * 使用 subtotalsSpec 优化的计算方法
+   */
+  private async _computeResolvedUnionWithSubtotalsSpec(
+    options: ComputeOptions,
+    readyExternals: ExpressionExternalAlteration
+  ): Promise<PlywoodValue> {
+    const { customOptions, rawQueries } = options;
+
+    // 设置 subtotalsSpec 优化标志
+    customOptions.useSubtotalsSpec = true;
+
+    // 执行单次查询
+    const readyExternalsFilled = await fillExpressionExternalAlterationAsync(
+      readyExternals,
+      (external, terminal) => {
+        return external.queryValue(terminal, rawQueries, customOptions);
+      }
+    );
+
+    // 应用结果
+    let ex = this.applyReadyExternals(readyExternalsFilled);
+
+    return ex.getLiteralValue();
   }
 }
 
