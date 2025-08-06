@@ -101,6 +101,7 @@ node tests/subtotals/test_subtotals_new.js
 2. **Druid 版本**: 确保 Druid 版本支持 subtotalsSpec
 3. **查询复杂度**: 维度过多时注意查询复杂度
 4. **测试验证**: 在生产环境使用前充分测试
+5. **排序一致**: 所有子请求的 `limitSpec` 都是一样的（用于排序），合并时保持原始的排序规则
 
 ## 故障排除
 

@@ -328,6 +328,11 @@ const checkForMultiSplit = (alterations: any): boolean => {
 - 检查 `customOptions.useSubtotalsSpec` 标志
 - 自动生成并添加 subtotalsSpec 到查询中
 
+#### 查询合并优化
+- **limitSpec 一致性**: 所有子请求的 `limitSpec` 都是一样的（用于排序），直接使用第一个找到的 `limitSpec`
+- **virtualColumns 合并**: 收集并去重所有查询中的 virtualColumns
+- **维度去重**: 使用 `dimension` 字段去重，使用 `outputName` 生成 subtotalsSpec
+
 ### 3. SplitExpression (src/expressions/splitExpression.ts)
 
 #### 现有的 `isMultiSplit()` 方法

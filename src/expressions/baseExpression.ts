@@ -2205,8 +2205,6 @@ export abstract class Expression
     context: Datum,
     options: ComputeOptions
   ): Promise<PlywoodValue> {
-    const { customOptions, rawQueries } = options;
-
     try {
       // 1. 使用 simulateQueryPlan 获取所有查询的 JSON
       const queryPlan = this.simulateQueryPlan(context, options);
@@ -2350,7 +2348,7 @@ export abstract class Expression
 
     // 合并其他参数（如果模板中没有的话）
     for (const query of dimensionQueries) {
-      // 合并 limitSpec
+      // 合并 limitSpec（所有子请求的 limitSpec 都是一样的，直接使用第一个）
       if (query.limitSpec && !mergedQuery.limitSpec) {
         mergedQuery.limitSpec = query.limitSpec;
       }
@@ -2359,6 +2357,10 @@ export abstract class Expression
       if (query.having && !mergedQuery.having) {
         mergedQuery.having = query.having;
       }
+    }
+
+    if (mergedQuery.limitSpec) {
+      mergedQuery.limitSpec.limit = 10000;
     }
 
     return mergedQuery;

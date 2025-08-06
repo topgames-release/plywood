@@ -13,6 +13,7 @@ tests/
     ├── test_subtotals_new.js           # 新实现测试
     ├── test_complete_subtotals.js      # 完整功能测试
     ├── test_dimension_dedup.js         # 维度去重测试
+    ├── test_limitspec_consistency.js   # limitSpec 一致性合并测试
     ├── test_virtualcolumns_merge.js    # virtualColumns 合并测试
     └── test_subtotals_outputname.js    # outputName 修复测试
 ```
@@ -82,6 +83,15 @@ node tests/subtotals/test_subtotals_outputname.js
 - outputName vs dimension 处理
 - Druid 兼容性验证
 - 错误修复验证
+
+### limitSpec 一致性合并测试
+```bash
+node tests/subtotals/test_limitspec_consistency.js
+```
+**测试内容**:
+- limitSpec 一致性验证（所有子请求都一样）
+- 正确使用第一个找到的 limitSpec
+- 排序规则保持不变
 
 ## 🚀 运行所有测试
 
