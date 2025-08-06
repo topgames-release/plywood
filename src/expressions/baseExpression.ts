@@ -2037,7 +2037,16 @@ export abstract class Expression
           // Top level externals need to be unsuppressed
           readyExpression = readyExpression.unsuppress();
         }
-        // todo: 2
+
+        const { customOptions } = options;
+
+        // 检查是否启用 subtotalsSpec 优化
+        if (customOptions && customOptions.useSubtotalsSpec) {
+          return readyExpression._computeWithSubtotalsSpec(
+            introspectedContext,
+            options
+          );
+        }
         return readyExpression._computeResolved(options);
       });
   }
@@ -2186,6 +2195,261 @@ export abstract class Expression
         throw new Error(`something went wrong, did not get literal: ${ex}`);
       return ex.getLiteralValue();
     });
+  }
+
+  /**
+   * 使用 subtotalsSpec 优化计算表达式
+   * 通过 simulateQueryPlan 获取所有查询，然后合并为一个带有 subtotalsSpec 的 groupBy 查询
+   */
+  private _computeWithSubtotalsSpec(
+    context: Datum,
+    options: ComputeOptions
+  ): Promise<PlywoodValue> {
+    const { customOptions, rawQueries } = options;
+
+    try {
+      // 1. 使用 simulateQueryPlan 获取所有查询的 JSON
+      const queryPlan = this.simulateQueryPlan(context, options);
+      console.log("获取到查询计划，组数:", queryPlan.length);
+
+      if (queryPlan.length === 0) {
+        throw new Error("没有生成查询计划");
+      }
+
+      // 2. 合并查询为一个带有 subtotalsSpec 的 groupBy 查询
+      const mergedQuery = this._mergeQueriesWithSubtotalsSpec(queryPlan);
+      console.log("合并后的查询:", JSON.stringify(mergedQuery, null, 2));
+
+      // 3. 执行合并后的查询
+      return this._executeSubtotalsQuery(mergedQuery, context, options);
+    } catch (error) {
+      console.error("subtotalsSpec 优化失败，回退到正常计算:", error.message);
+      // 回退到正常计算
+      return this._computeResolved(options);
+    }
+  }
+
+  /**
+   * 合并多个查询为一个带有 subtotalsSpec 的 groupBy 查询
+   */
+  private _mergeQueriesWithSubtotalsSpec(queryPlan: any[][]): any {
+    // 找到第一个 timeseries 查询作为模板
+    let templateQuery: any = null;
+    const dimensionQueries: any[] = [];
+
+    for (const group of queryPlan) {
+      for (const query of group) {
+        if (query.queryType === "timeseries" && !templateQuery) {
+          templateQuery = { ...query };
+        } else if (
+          query.queryType === "topN" ||
+          query.queryType === "groupBy"
+        ) {
+          dimensionQueries.push(query);
+        }
+      }
+    }
+
+    if (!templateQuery) {
+      throw new Error("未找到 timeseries 查询作为模板");
+    }
+
+    if (dimensionQueries.length === 0) {
+      throw new Error("未找到维度查询");
+    }
+
+    // 以 timeseries 查询为模板，转换为 groupBy 查询
+    const mergedQuery = {
+      ...templateQuery,
+      queryType: "groupBy",
+      granularity: "all",
+    };
+
+    // 收集所有 virtualColumns 并去重
+    const virtualColumnsMap = new Map<string, any>();
+
+    // 从模板查询中添加 virtualColumns
+    if (
+      templateQuery.virtualColumns &&
+      Array.isArray(templateQuery.virtualColumns)
+    ) {
+      for (const vc of templateQuery.virtualColumns) {
+        if (vc.name) {
+          virtualColumnsMap.set(vc.name, vc);
+        }
+      }
+    }
+
+    // 收集所有维度并去重
+    const dimensionsMap = new Map<string, any>();
+
+    // 从维度查询中提取维度信息和 virtualColumns
+    for (const query of dimensionQueries) {
+      // 收集 virtualColumns
+      if (query.virtualColumns && Array.isArray(query.virtualColumns)) {
+        for (const vc of query.virtualColumns) {
+          if (vc.name && !virtualColumnsMap.has(vc.name)) {
+            virtualColumnsMap.set(vc.name, vc);
+          }
+        }
+      }
+
+      // 收集维度
+      if (query.dimension) {
+        // topN 查询的维度
+        const dimName = this._extractDimensionName(query.dimension);
+        if (dimName && !dimensionsMap.has(dimName)) {
+          dimensionsMap.set(dimName, query.dimension);
+        }
+      } else if (query.dimensions && Array.isArray(query.dimensions)) {
+        // groupBy 查询的维度
+        for (const dim of query.dimensions) {
+          const dimName = this._extractDimensionName(dim);
+          if (dimName && !dimensionsMap.has(dimName)) {
+            dimensionsMap.set(dimName, dim);
+          }
+        }
+      }
+    }
+
+    // 生成 subtotalsSpec
+    if (dimensionsMap.size > 0) {
+      const dimensions = Array.from(dimensionsMap.values());
+      const dimensionNames = Array.from(dimensionsMap.keys());
+
+      console.log("去重后的维度名称:", dimensionNames);
+
+      // 为 subtotalsSpec 生成输出名称（使用 outputName）
+      const dimensionOutputNames = dimensions
+        .map((dim) => this._extractDimensionOutputName(dim))
+        .filter((name) => name !== null);
+
+      console.log("subtotalsSpec 使用的输出名称:", dimensionOutputNames);
+
+      const subtotalsSpec: string[][] = [];
+
+      // 生成所有可能的维度组合（使用 outputName）
+      for (let i = dimensionOutputNames.length; i > 0; i--) {
+        subtotalsSpec.push(dimensionOutputNames.slice(0, i));
+      }
+      // 添加空数组表示总计
+      subtotalsSpec.push([]);
+
+      mergedQuery.dimensions = dimensions;
+      mergedQuery.subtotalsSpec = subtotalsSpec;
+    }
+
+    // 添加 virtualColumns 到合并查询中
+    if (virtualColumnsMap.size > 0) {
+      mergedQuery.virtualColumns = Array.from(virtualColumnsMap.values());
+      console.log(
+        "合并的 virtualColumns 数量:",
+        mergedQuery.virtualColumns.length
+      );
+    }
+
+    // 合并其他参数（如果模板中没有的话）
+    for (const query of dimensionQueries) {
+      // 合并 limitSpec
+      if (query.limitSpec && !mergedQuery.limitSpec) {
+        mergedQuery.limitSpec = query.limitSpec;
+      }
+
+      // 合并 having
+      if (query.having && !mergedQuery.having) {
+        mergedQuery.having = query.having;
+      }
+    }
+
+    return mergedQuery;
+  }
+
+  /**
+   * 提取维度名称，用于去重（使用 dimension 字段）
+   */
+  private _extractDimensionName(dim: any): string | null {
+    if (typeof dim === "string") {
+      return dim;
+    } else if (dim.dimension) {
+      return dim.dimension;
+    } else if (dim.outputName) {
+      return dim.outputName;
+    }
+    return null;
+  }
+
+  /**
+   * 提取维度的输出名称，用于 subtotalsSpec（使用 outputName 字段）
+   */
+  private _extractDimensionOutputName(dim: any): string | null {
+    if (typeof dim === "string") {
+      return dim;
+    } else if (dim.outputName) {
+      return dim.outputName;
+    } else if (dim.dimension) {
+      return dim.dimension;
+    }
+    return null;
+  }
+
+  /**
+   * 执行 subtotalsSpec 查询
+   */
+  private _executeSubtotalsQuery(
+    query: any,
+    context: Datum,
+    options: ComputeOptions
+  ): Promise<PlywoodValue> {
+    console.log("执行 subtotalsSpec 查询");
+
+    // 1. 找到对应的 DruidExternal
+    const druidExternal = this._findDruidExternal(context);
+    if (!druidExternal) {
+      throw new Error("未找到 DruidExternal 数据源");
+    }
+
+    // 2. 创建一个新的 DruidExternal 实例来执行合并后的查询
+    const optimizedExternal = druidExternal.addFilter(Expression.TRUE);
+
+    // 3. 直接使用合并后的查询执行请求
+    const { rawQueries, customOptions } = options;
+
+    // 创建优化的 customOptions，包含合并后的查询
+    const optimizedCustomOptions = {
+      ...customOptions,
+      subtotalsQuery: query,
+      useDirectQuery: true,
+    };
+
+    // 4. 执行查询
+    return optimizedExternal
+      .queryValue(this, rawQueries, optimizedCustomOptions)
+      .then((result: any) => {
+        console.log("subtotalsSpec 查询执行成功");
+        return result;
+      })
+      .catch((error: any) => {
+        console.error("subtotalsSpec 查询执行失败:", error.message);
+        // 回退到正常计算
+        return this._computeResolved(options);
+      });
+  }
+
+  /**
+   * 从上下文中找到 DruidExternal 数据源
+   */
+  private _findDruidExternal(context: Datum): any {
+    for (const key in context) {
+      const value = context[key];
+      if (
+        value &&
+        value.constructor &&
+        value.constructor.name === "DruidExternal"
+      ) {
+        return value;
+      }
+    }
+    return null;
   }
 }
 
