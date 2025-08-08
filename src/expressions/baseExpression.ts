@@ -2410,31 +2410,62 @@ export abstract class Expression
       throw new Error("未找到 DruidExternal 数据源");
     }
 
-    // 2. 创建一个新的 DruidExternal 实例来执行合并后的查询
-    const optimizedExternal = druidExternal.addFilter(Expression.TRUE);
-
-    // 3. 直接使用合并后的查询执行请求
+    // 2. 获取必要的查询执行参数
     const { rawQueries, customOptions } = options;
+    const { engine } = druidExternal;
+    const requester = druidExternal.requester;
 
-    // 创建优化的 customOptions，包含合并后的查询
-    const optimizedCustomOptions = {
-      ...customOptions,
-      subtotalsQuery: query,
-      useDirectQuery: true,
+    if (!requester) {
+      throw new Error(
+        "DruidExternal 缺少 requester，请确保在创建 External 时传入了 requester"
+      );
+    }
+
+    // 3. 构建查询上下文
+    const queryContext: any = {
+      timestamp: null,
+      ignorePrefix: "!",
+      dummyPrefix: "***",
     };
 
-    // 4. 执行查询
-    return optimizedExternal
-      .queryValue(this, rawQueries, optimizedCustomOptions)
-      .then((result: any) => {
+    // 4. 创建 postTransform 函数
+    // 使用 External 的标准 postTransform 工厂方法
+    const postTransform = External.postTransformFactory(
+      [], // inflaters - 暂时为空，因为我们直接处理 subtotalsSpec 结果
+      [], // attributes - 暂时为空
+      null, // keys
+      null // zeroTotalApplies
+    );
+
+    // 5. 构建 QueryAndPostTransform 对象
+    const queryAndPostTransform = {
+      query,
+      context: queryContext,
+      postTransform,
+    };
+
+    // 6. 直接使用 External.performQueryAndPostTransform
+    console.log("直接执行 subtotalsSpec 查询:", JSON.stringify(query, null, 2));
+
+    try {
+      const resultStream = External.performQueryAndPostTransform(
+        queryAndPostTransform,
+        requester,
+        engine,
+        rawQueries,
+        customOptions
+      );
+
+      // 7. 将流转换为 PlywoodValue
+      return External.buildValueFromStream(resultStream).then((result: any) => {
         console.log("subtotalsSpec 查询执行成功");
         return result;
-      })
-      .catch((error: any) => {
-        console.error("subtotalsSpec 查询执行失败:", error.message);
-        // 回退到正常计算
-        return this._computeResolved(options);
       });
+    } catch (error) {
+      console.error("subtotalsSpec 查询执行失败:", error.message);
+      // 回退到正常计算
+      return this._computeResolved(options);
+    }
   }
 
   /**
