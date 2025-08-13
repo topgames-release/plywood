@@ -2395,6 +2395,326 @@ export abstract class Expression
   }
 
   /**
+   * 去除 Druid 生成的 dummy 前缀（例如 '***'）
+   */
+  private _stripDummyPrefix(name: string): string {
+    const dummyPrefix = "***";
+    if (typeof name === "string" && name.indexOf(dummyPrefix) === 0) {
+      return name.slice(dummyPrefix.length);
+    }
+    return name;
+  }
+
+  /**
+   * 在实际数据行中解析出某个维度键真正使用的字段名（可能带有 dummy 前缀）
+   */
+  private _resolveActualKeyName(requestedKey: string, data: any[]): string {
+    if (!Array.isArray(data) || data.length === 0) return requestedKey;
+    const prefixed = "***" + requestedKey;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (!row) continue;
+      if (Object.prototype.hasOwnProperty.call(row, requestedKey))
+        return requestedKey;
+      if (Object.prototype.hasOwnProperty.call(row, prefixed)) return prefixed;
+    }
+    return requestedKey;
+  }
+
+  /**
+   * 判断一行是否为“总计行”（所有维度键均为 null/undefined）
+   */
+  private _rowMatchesTotal(row: any, keys: string[]): boolean {
+    for (const k of keys) {
+      const actual = this._resolveActualKeyName(k, [row]);
+      if (!(row[actual] === null || row[actual] === undefined)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * 从 subtotalsSpec 查询中提取 attributes 信息
+   * 注意：需要移除 dimensions.outputName 上可能存在的 dummy 前缀 (***),
+   * 以确保与实际数据中的字段名匹配
+   */
+  private _extractAttributesFromSubtotalsQuery(query: any): {
+    attributes: any[];
+    keys: string[];
+  } {
+    const attributes: any[] = [];
+    const keys: string[] = [];
+
+    // 1. 处理维度信息
+    if (query.dimensions && Array.isArray(query.dimensions)) {
+      query.dimensions.forEach((dimension: any) => {
+        const rawName = dimension.outputName || dimension.dimension;
+        const outputName = this._stripDummyPrefix(rawName);
+        keys.push(outputName);
+
+        // 根据维度类型确定属性类型
+        let attributeType = "STRING";
+        if (
+          dimension.outputType === "LONG" ||
+          dimension.outputType === "FLOAT"
+        ) {
+          attributeType = "NUMBER";
+        } else if (
+          dimension.dimension === "__time" ||
+          outputName === "__time"
+        ) {
+          // __time 作为维度通常应视为时间（按桶聚合时可视为 TIME / TIME_RANGE）
+          attributeType = "TIME_RANGE";
+        }
+
+        attributes.push({
+          name: outputName,
+          type: attributeType,
+        });
+      });
+    }
+
+    // 2. 处理聚合信息
+    if (query.aggregations && Array.isArray(query.aggregations)) {
+      query.aggregations.forEach((aggregation: any) => {
+        attributes.push({
+          name: aggregation.name,
+          type: "NUMBER",
+        });
+      });
+    }
+
+    // 3. 处理后聚合信息
+    if (query.postAggregations && Array.isArray(query.postAggregations)) {
+      query.postAggregations.forEach((postAggregation: any) => {
+        attributes.push({
+          name: postAggregation.name,
+          type: "NUMBER",
+        });
+      });
+    }
+
+    return { attributes, keys };
+  }
+
+  /**
+   * 将扁平化的 subtotalsSpec 结果转换为层级结构
+   */
+  private _buildHierarchicalDataset(
+    flatResult: any,
+    query: any,
+    extractedInfo: { attributes: any[]; keys: string[] }
+  ): any {
+    if (!flatResult || !flatResult.data || !Array.isArray(flatResult.data)) {
+      return flatResult;
+    }
+
+    const { attributes, keys } = extractedInfo;
+    const { subtotalsSpec } = query;
+
+    if (
+      !subtotalsSpec ||
+      !Array.isArray(subtotalsSpec) ||
+      subtotalsSpec.length === 0
+    ) {
+      return flatResult;
+    }
+
+    // 简化的层级构建策略：
+    // 1. 找到总计行（所有维度都为 null）
+    // 2. 按第一个维度分组构建第一层 SPLIT
+    // 3. 递归构建更深层级
+
+    const data = flatResult.data;
+
+    // 计算每个维度键在数据中的实际字段名（可能带有 '***' 前缀）
+    const actualKeys = keys.map((k) => this._resolveActualKeyName(k, data));
+
+    // 找到总计行
+    const totalRow = data.find((row: any) =>
+      actualKeys.every(
+        (ak: string) => row[ak] === null || row[ak] === undefined
+      )
+    );
+
+    if (!totalRow) {
+      console.warn("未找到总计行，使用原始结果");
+      return flatResult;
+    }
+
+    // 构建顶层数据对象
+    const topLevelData: any = {};
+
+    // 添加聚合字段
+    attributes.forEach((attr: any) => {
+      if (attr.type === "NUMBER" && totalRow[attr.name] !== undefined) {
+        topLevelData[attr.name] = totalRow[attr.name];
+      }
+    });
+
+    // 如果有维度，构建 SPLIT
+    if (keys.length > 0) {
+      const splitData = this._buildSimpleSplit(data, keys, attributes, 0);
+      if (splitData && splitData.data.length > 0) {
+        topLevelData.SPLIT = splitData;
+      }
+    }
+
+    return {
+      attributes: this._buildTopLevelAttributes(attributes, keys),
+      keys: [],
+      data: [topLevelData],
+    };
+  }
+
+  /**
+   * 构建简单的 SPLIT 数据集
+   */
+  private _buildSimpleSplit(
+    data: any[],
+    keys: string[],
+    attributes: any[],
+    level: number
+  ): any {
+    if (level >= keys.length) {
+      return null;
+    }
+
+    const currentKey = keys[level];
+    const actualKey = this._resolveActualKeyName(currentKey, data);
+    const groups: Record<string, any[]> = {};
+
+    // 按当前键（实际字段名）分组数据
+    data.forEach((row: any) => {
+      const keyValue = row[actualKey];
+      if (keyValue !== null && keyValue !== undefined) {
+        const groupKey = String(keyValue);
+        if (!groups[groupKey]) {
+          groups[groupKey] = [];
+        }
+        groups[groupKey].push(row);
+      }
+    });
+
+    const splitData: any[] = [];
+
+    // 为每个分组构建数据项
+    Object.keys(groups).forEach((keyValue) => {
+      const groupData = groups[keyValue];
+      const splitItem: any = {};
+
+      // 设置当前维度值
+      splitItem[currentKey] = keyValue;
+
+      // 找到当前分组的聚合数据
+      const aggregateRow = groupData.find((row: any) => {
+        // 当前维度有值，后续维度为 null 的行就是当前层级的聚合
+        return (
+          row[currentKey] === keyValue &&
+          (level + 1 >= keys.length ||
+            keys
+              .slice(level + 1)
+              .every((k) => row[k] === null || row[k] === undefined))
+        );
+      });
+
+      if (aggregateRow) {
+        // 添加聚合字段
+        attributes.forEach((attr: any) => {
+          if (attr.type === "NUMBER" && aggregateRow[attr.name] !== undefined) {
+            splitItem[attr.name] = aggregateRow[attr.name];
+          }
+        });
+      }
+
+      // 如果还有更深层级，递归构建
+      if (level + 1 < keys.length) {
+        const nestedSplit = this._buildSimpleSplit(
+          groupData,
+          keys,
+          attributes,
+          level + 1
+        );
+        if (nestedSplit && nestedSplit.data.length > 0) {
+          splitItem.SPLIT = nestedSplit;
+        }
+      }
+
+      splitData.push(splitItem);
+    });
+
+    return {
+      keys: [currentKey],
+      attributes: this._buildSplitAttributes(
+        attributes,
+        currentKey,
+        keys,
+        level
+      ),
+      data: splitData,
+    };
+  }
+
+  /**
+   * 构建顶层 attributes
+   */
+  private _buildTopLevelAttributes(
+    allAttributes: any[],
+    keys: string[]
+  ): any[] {
+    const topLevelAttributes: any[] = [];
+
+    // 添加非键的聚合属性
+    allAttributes.forEach((attr) => {
+      if (!keys.includes(attr.name)) {
+        topLevelAttributes.push(attr);
+      }
+    });
+
+    // 添加 SPLIT 属性
+    topLevelAttributes.push({
+      name: "SPLIT",
+      type: "DATASET",
+    });
+
+    return topLevelAttributes;
+  }
+
+  /**
+   * 构建 SPLIT 层级的 attributes
+   */
+  private _buildSplitAttributes(
+    allAttributes: any[],
+    splitKey: string,
+    keys: string[],
+    currentLevel: number
+  ): any[] {
+    const splitAttributes: any[] = [];
+
+    // 添加当前分割键的属性
+    const keyAttribute = allAttributes.find((attr) => attr.name === splitKey);
+    if (keyAttribute) {
+      splitAttributes.push(keyAttribute);
+    }
+
+    // 添加聚合属性
+    allAttributes.forEach((attr) => {
+      if (attr.type === "NUMBER") {
+        splitAttributes.push(attr);
+      }
+    });
+
+    // 只有在不是最深层级时才添加 SPLIT 属性
+    if (currentLevel + 1 < keys.length) {
+      splitAttributes.push({
+        name: "SPLIT",
+        type: "DATASET",
+      });
+    }
+
+    return splitAttributes;
+  }
+
+  /**
    * 执行 subtotalsSpec 查询
    */
   private _executeSubtotalsQuery(
@@ -2421,30 +2741,34 @@ export abstract class Expression
       );
     }
 
-    // 3. 构建查询上下文
+    // 3. 从查询中提取 attributes 和 keys 信息
+    const extractedInfo = this._extractAttributesFromSubtotalsQuery(query);
+    console.log("提取的查询信息:", extractedInfo);
+
+    // 4. 构建查询上下文
     const queryContext: any = {
       timestamp: null,
       ignorePrefix: "!",
       dummyPrefix: "***",
     };
 
-    // 4. 创建 postTransform 函数
-    // 使用 External 的标准 postTransform 工厂方法
+    // 5. 创建 postTransform 函数
+    // 使用提取的 attributes 和 keys 信息
     const postTransform = External.postTransformFactory(
       [], // inflaters - 暂时为空，因为我们直接处理 subtotalsSpec 结果
-      [], // attributes - 暂时为空
-      null, // keys
+      [], // attributes - 暂时为空，我们将在后处理中构建层级结构
+      null, // keys - 暂时为空
       null // zeroTotalApplies
     );
 
-    // 5. 构建 QueryAndPostTransform 对象
+    // 6. 构建 QueryAndPostTransform 对象
     const queryAndPostTransform = {
       query,
       context: queryContext,
       postTransform,
     };
 
-    // 6. 直接使用 External.performQueryAndPostTransform
+    // 7. 直接使用 External.performQueryAndPostTransform
     console.log("直接执行 subtotalsSpec 查询:", JSON.stringify(query, null, 2));
 
     try {
@@ -2456,10 +2780,20 @@ export abstract class Expression
         customOptions
       );
 
-      // 7. 将流转换为 PlywoodValue
+      // 8. 将流转换为 PlywoodValue，然后转换为层级结构
       return External.buildValueFromStream(resultStream).then((result: any) => {
-        console.log("subtotalsSpec 查询执行成功");
-        return result;
+        console.log("subtotalsSpec 查询执行成功，开始构建层级结构");
+
+        // 将扁平化结果转换为层级结构
+        const hierarchicalResult = this._buildHierarchicalDataset(
+          result,
+          query,
+          extractedInfo
+        );
+        console.log("层级结构构建完成");
+
+        // 使用 Dataset.fromJS 创建正确的 Dataset 对象
+        return Dataset.fromJS(hierarchicalResult);
       });
     } catch (error) {
       console.error("subtotalsSpec 查询执行失败:", error.message);
