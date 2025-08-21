@@ -2497,6 +2497,77 @@ export abstract class Expression
   }
 
   /**
+   * 提取时间维度信息（period 与 timeZone），用于将字符串 __time 转换为 TimeRange
+   */
+  private _getTimeDimensionInfo(
+    query: any,
+    keyName: string
+  ): { duration: Duration; timezone: Timezone } | null {
+    if (!query || !Array.isArray(query.dimensions)) return null;
+
+    for (const dim of query.dimensions) {
+      const rawName = (dim.outputName || dim.dimension) as string;
+      const outputName = this._stripDummyPrefix(rawName);
+      if (outputName !== keyName) continue;
+
+      // 仅处理 __time 维度的 timeFormat 提取函数
+      if (
+        (dim.dimension === "__time" || outputName === "__time") &&
+        dim.extractionFn &&
+        dim.extractionFn.type === "timeFormat" &&
+        dim.extractionFn.granularity &&
+        (dim.extractionFn.granularity.type === "period" ||
+          typeof dim.extractionFn.granularity.period === "string")
+      ) {
+        const period = dim.extractionFn.granularity.period;
+        const tz = dim.extractionFn.granularity.timeZone || "Etc/UTC";
+        try {
+          const duration = Duration.fromJS(period);
+          const timezone = Timezone.fromJS(tz);
+          return { duration, timezone };
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 如果当前分组键是 __time，则尝试将字符串键值转换为 TimeRange
+   */
+  private _maybeConvertTimeKey(
+    query: any,
+    keyName: string,
+    keyValue: any
+  ): any {
+    if (keyName !== "__time") return keyValue;
+    if (keyValue == null) return keyValue;
+
+    const info = this._getTimeDimensionInfo(query, keyName);
+    if (!info) return keyValue;
+
+    let start: Date;
+    if (keyValue instanceof Date) {
+      start = keyValue as Date;
+    } else if (typeof keyValue === "string" || typeof keyValue === "number") {
+      const d = new Date(keyValue as any);
+      if (isNaN(d as any)) return keyValue;
+      start = d;
+    } else {
+      return keyValue;
+    }
+
+    try {
+      const end = info.duration.shift(start, info.timezone, 1);
+      return new TimeRange({ start, end });
+    } catch {
+      return keyValue;
+    }
+  }
+
+  /**
    * 将扁平化的 subtotalsSpec 结果转换为层级结构
    */
   private _buildHierarchicalDataset(
@@ -2553,7 +2624,13 @@ export abstract class Expression
 
     // 如果有维度，构建 SPLIT
     if (keys.length > 0) {
-      const splitData = this._buildSimpleSplit(data, keys, attributes, 0);
+      const splitData = this._buildSimpleSplit(
+        data,
+        keys,
+        attributes,
+        0,
+        query
+      );
       if (splitData && splitData.data.length > 0) {
         topLevelData.SPLIT = splitData;
       }
@@ -2573,7 +2650,8 @@ export abstract class Expression
     data: any[],
     keys: string[],
     attributes: any[],
-    level: number
+    level: number,
+    query: any
   ): any {
     if (level >= keys.length) {
       return null;
@@ -2602,19 +2680,20 @@ export abstract class Expression
       const groupData = groups[keyValue];
       const splitItem: any = {};
 
-      // 设置当前维度值
-      splitItem[currentKey] = keyValue;
+      // 设置当前维度值（对 __time 转换为 TimeRange）
+      const maybeTime = this._maybeConvertTimeKey(query, currentKey, keyValue);
+      splitItem[currentKey] = maybeTime;
 
       // 找到当前分组的聚合数据
       const aggregateRow = groupData.find((row: any) => {
         // 当前维度有值，后续维度为 null 的行就是当前层级的聚合
-        return (
-          row[currentKey] === keyValue &&
-          (level + 1 >= keys.length ||
-            keys
-              .slice(level + 1)
-              .every((k) => row[k] === null || row[k] === undefined))
-        );
+        const curMatches = row[actualKey] === keyValue;
+        if (!curMatches) return false;
+        if (level + 1 >= keys.length) return true;
+        return keys.slice(level + 1).every((k) => {
+          const ak = this._resolveActualKeyName(k, [row]);
+          return row[ak] === null || row[ak] === undefined;
+        });
       });
 
       if (aggregateRow) {
@@ -2632,7 +2711,8 @@ export abstract class Expression
           groupData,
           keys,
           attributes,
-          level + 1
+          level + 1,
+          query
         );
         if (nestedSplit && nestedSplit.data.length > 0) {
           splitItem.SPLIT = nestedSplit;
