@@ -2722,6 +2722,9 @@ export abstract class Expression
       splitData.push(splitItem);
     });
 
+    // 应用 limitSpec 排序
+    this._applySortingToSplitData(splitData, query);
+
     return {
       keys: [currentKey],
       attributes: this._buildSplitAttributes(
@@ -2732,6 +2735,79 @@ export abstract class Expression
       ),
       data: splitData,
     };
+  }
+
+  /**
+   * 根据 limitSpec 对 splitData 进行排序
+   */
+  private _applySortingToSplitData(splitData: any[], query: any): void {
+    if (
+      !query ||
+      !query.limitSpec ||
+      !query.limitSpec.columns ||
+      !Array.isArray(query.limitSpec.columns)
+    ) {
+      return;
+    }
+
+    const sortColumns = query.limitSpec.columns;
+    if (sortColumns.length === 0) {
+      return;
+    }
+
+    // 支持多列排序，按照 columns 数组的顺序进行排序
+    splitData.sort((a: any, b: any) => {
+      for (const sortColumn of sortColumns) {
+        const dimension = sortColumn.dimension;
+        const direction = sortColumn.direction || "ascending";
+
+        const aValue = a[dimension];
+        const bValue = b[dimension];
+
+        let comparison = 0;
+
+        // 处理 null/undefined 值
+        if (aValue == null && bValue == null) {
+          comparison = 0;
+        } else if (aValue == null) {
+          comparison = 1; // null 值排在后面
+        } else if (bValue == null) {
+          comparison = -1; // null 值排在后面
+        } else {
+          // 根据排序方向进行比较
+          if (direction === "descending") {
+            // 降序：大的值排在前面
+            if (typeof aValue === "number" && typeof bValue === "number") {
+              comparison = bValue - aValue;
+            } else {
+              // 字符串降序比较
+              const aStr = String(aValue);
+              const bStr = String(bValue);
+              comparison = bStr < aStr ? -1 : bStr > aStr ? 1 : 0;
+            }
+          } else {
+            // 升序：小的值排在前面
+            if (typeof aValue === "number" && typeof bValue === "number") {
+              comparison = aValue - bValue;
+            } else {
+              // 字符串升序比较
+              const aStr = String(aValue);
+              const bStr = String(bValue);
+              comparison = aStr < bStr ? -1 : aStr > bStr ? 1 : 0;
+            }
+          }
+        }
+
+        // 如果当前列的比较结果不为 0，则返回结果
+        if (comparison !== 0) {
+          return comparison;
+        }
+
+        // 如果当前列相等，继续比较下一列
+      }
+
+      return 0;
+    });
   }
 
   /**
