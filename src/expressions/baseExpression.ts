@@ -2346,21 +2346,22 @@ export abstract class Expression
       );
     }
 
-    // 合并其他参数（如果模板中没有的话）
+    // 合并其他参数
     for (const query of dimensionQueries) {
-      // 合并 limitSpec（所有子请求的 limitSpec 都是一样的，直接使用第一个）
-      if (query.limitSpec && !mergedQuery.limitSpec) {
-        mergedQuery.limitSpec = query.limitSpec;
-      }
-
       // 合并 having
       if (query.having && !mergedQuery.having) {
         mergedQuery.having = query.having;
       }
     }
 
-    if (mergedQuery.limitSpec) {
-      mergedQuery.limitSpec.limit = 10000;
+    // 合并所有排序规则（维度排序 + 指标排序）
+    const sortColumns = this._mergeSortColumns(dimensionQueries);
+    if (sortColumns.length > 0) {
+      mergedQuery.limitSpec = {
+        type: "default",
+        columns: sortColumns,
+        limit: 10000,
+      };
     }
 
     return mergedQuery;
@@ -2392,6 +2393,65 @@ export abstract class Expression
       return dim.dimension;
     }
     return null;
+  }
+
+  /**
+   * 从 topN 查询的 metric 字段中提取排序规则
+   */
+  private _extractSortFromTopNMetric(query: any): any | null {
+    if (query.queryType !== "topN" || !query.metric) return null;
+
+    const metric = query.metric;
+    let direction = "ascending";
+    let dimensionOrder = "lexicographic";
+
+    // 处理 inverted 类型（表示倒序）
+    if (metric.type === "inverted") {
+      direction = "descending";
+      if (metric.metric && metric.metric.type === "dimension") {
+        dimensionOrder = metric.metric.ordering || "lexicographic";
+      }
+    } else if (metric.type === "dimension") {
+      dimensionOrder = metric.ordering || "lexicographic";
+    } else {
+      return null; // 不是维度排序
+    }
+
+    // 提取维度输出名称
+    const dimension = this._extractDimensionOutputName(query.dimension);
+    if (!dimension) return null;
+
+    return { dimension, direction, dimensionOrder };
+  }
+
+  /**
+   * 合并所有排序规则（维度排序优先，指标排序次之）
+   */
+  private _mergeSortColumns(dimensionQueries: any[]): any[] {
+    const sortMap = new Map<string, any>(); // key: dimension 名称, value: OrderByColumnSpec
+
+    // 1. 先收集维度排序（优先级高）
+    for (const query of dimensionQueries) {
+      if (query.queryType === "topN") {
+        const sortSpec = this._extractSortFromTopNMetric(query);
+        if (sortSpec && !sortMap.has(sortSpec.dimension)) {
+          sortMap.set(sortSpec.dimension, sortSpec);
+        }
+      }
+    }
+
+    // 2. 再收集指标排序（优先级低）
+    for (const query of dimensionQueries) {
+      if (query.limitSpec && query.limitSpec.columns) {
+        for (const column of query.limitSpec.columns) {
+          if (!sortMap.has(column.dimension)) {
+            sortMap.set(column.dimension, column);
+          }
+        }
+      }
+    }
+
+    return Array.from(sortMap.values());
   }
 
   /**
