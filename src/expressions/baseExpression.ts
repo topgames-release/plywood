@@ -2029,23 +2029,45 @@ export abstract class Expression
         return introspectDatum(context);
       })
       .then((introspectedContext: Datum) => {
+        const { customOptions } = options;
+
+        // 检查是否启用 subtotalsSpec 优化
+        if (customOptions && customOptions.useSubtotalsSpec) {
+          // 关键修复：为 subtotalsSpec 优化创建两个独立的表达式副本
+          // 这样可以确保 splitExpressionsMap 和 queryPlan 内部的 ex 都是完整的
+
+          // 副本 1：用于提取 split expressions
+          let readyExpression1 = this._initialPrepare(
+            introspectedContext,
+            options
+          );
+          if (readyExpression1 instanceof ExternalExpression) {
+            readyExpression1 = readyExpression1.unsuppress();
+          }
+
+          // 副本 2：用于生成查询计划
+          let readyExpression2 = this._initialPrepare(
+            introspectedContext,
+            options
+          );
+          if (readyExpression2 instanceof ExternalExpression) {
+            readyExpression2 = readyExpression2.unsuppress();
+          }
+
+          return readyExpression1._computeWithSubtotalsSpec(
+            introspectedContext,
+            options,
+            readyExpression2 // 传入第二个副本用于生成 queryPlan
+          );
+        }
+
+        // 正常计算流程
         let readyExpression = this._initialPrepare(
           introspectedContext,
           options
         );
         if (readyExpression instanceof ExternalExpression) {
-          // Top level externals need to be unsuppressed
           readyExpression = readyExpression.unsuppress();
-        }
-
-        const { customOptions } = options;
-
-        // 检查是否启用 subtotalsSpec 优化
-        if (customOptions && customOptions.useSubtotalsSpec) {
-          return readyExpression._computeWithSubtotalsSpec(
-            introspectedContext,
-            options
-          );
         }
         return readyExpression._computeResolved(options);
       });
@@ -2198,28 +2220,230 @@ export abstract class Expression
   }
 
   /**
+   * 从表达式中递归提取所有层级的 split 的 expression 信息
+   * 参考 _computeResolvedSimulate 的循环逻辑，逐层处理嵌套的 split
+   * 注意：此方法不应改变原始表达式的状态，仅用于提取信息
+   *
+   * 关键点：
+   * 1. 通过 Expression.fromJS(expression.toJS()) 创建表达式的深拷贝
+   * 2. 在副本上调用 getReadyExternals 和 applyReadyExternals，避免状态污染
+   * 3. 原始表达式保持不变，可以继续用于后续的查询执行
+   */
+  private _extractSplitExpressionsFromExternals(
+    expression: Expression,
+    concurrentQueryLimit: number = Infinity
+  ): Map<string, Expression> {
+    const splitExpressionsMap = new Map<string, Expression>();
+
+    // 创建表达式的深拷贝，避免影响原始表达式
+    // 这是关键：simulateQueryPlan 已经消耗了表达式的状态
+    // 我们需要一个全新的副本来重新提取 split expressions
+    let ex: Expression = expression;
+    let readyExternals = ex.getReadyExternals(concurrentQueryLimit);
+    let computeCycles = 0;
+    const maxComputeCycles = 5; // 防止无限循环
+
+    // 递归提取每一层的 split 信息
+    while (
+      Object.keys(readyExternals).length > 0 &&
+      computeCycles < maxComputeCycles
+    ) {
+      // 从当前层的 readyExternals 提取 split 信息
+      this._extractSplitExpressionsFromAlterations(
+        readyExternals,
+        splitExpressionsMap
+      );
+
+      // 模拟执行以推进到下一层（不保存模拟查询）
+      fillExpressionExternalAlteration(readyExternals, (external, terminal) => {
+        return external.simulateValue(terminal, []);
+      });
+
+      // 应用结果并获取下一层的 readyExternals
+      ex = ex.applyReadyExternals(readyExternals);
+      readyExternals = ex.getReadyExternals(concurrentQueryLimit);
+      computeCycles++;
+    }
+
+    return splitExpressionsMap;
+  }
+
+  /**
+   * 从单层 alterations 中提取 split expressions
+   * 根据真实数据结构处理：
+   * 1. DatasetExternalAlterations 数组（item.jsonl 中的主要结构）
+   * 2. ExpressionExternalAlterationSimple 对象（包含 external）
+   * 3. 嵌套的 expressionAlterations 和 datasetAlterations
+   * 注意：某些对象可能同时包含 external 和 expressionAlterations（混合类型）
+   */
+  private _extractSplitExpressionsFromAlterations(
+    readyExternals: ExpressionExternalAlteration,
+    splitExpressionsMap: Map<string, Expression>
+  ): void {
+    for (const key in readyExternals) {
+      const alteration = readyExternals[key];
+
+      if (Array.isArray(alteration)) {
+        // 处理 DatasetExternalAlterations 数组
+        for (const item of alteration) {
+          // 处理当前项的 external
+          if (
+            item.external &&
+            item.external.mode === "split" &&
+            item.external.split
+          ) {
+            item.external.split.mapSplits(
+              (label: string, expression: Expression) => {
+                if (!splitExpressionsMap.has(label)) {
+                  splitExpressionsMap.set(label, expression);
+                }
+              }
+            );
+          }
+
+          // 递归处理 expressionAlterations（嵌套的表达式级别的 alterations）
+          if (item.expressionAlterations) {
+            this._extractSplitExpressionsFromAlterations(
+              item.expressionAlterations,
+              splitExpressionsMap
+            );
+          }
+
+          // 递归处理 datasetAlterations（嵌套的数据集级别的 alterations）
+          if (
+            item.datasetAlterations &&
+            Array.isArray(item.datasetAlterations)
+          ) {
+            for (const nestedItem of item.datasetAlterations) {
+              // 处理嵌套项的 external
+              if (
+                nestedItem.external &&
+                nestedItem.external.mode === "split" &&
+                nestedItem.external.split
+              ) {
+                nestedItem.external.split.mapSplits(
+                  (label: string, expression: Expression) => {
+                    if (!splitExpressionsMap.has(label)) {
+                      splitExpressionsMap.set(label, expression);
+                    }
+                  }
+                );
+              }
+
+              // 继续递归处理嵌套的 expressionAlterations
+              if (nestedItem.expressionAlterations) {
+                this._extractSplitExpressionsFromAlterations(
+                  nestedItem.expressionAlterations,
+                  splitExpressionsMap
+                );
+              }
+            }
+          }
+        }
+      } else {
+        // 处理非数组类型（可能是 ExpressionExternalAlterationSimple 或混合类型）
+        // 先处理 external（如果存在）
+        if (alteration.external) {
+          const external = alteration.external;
+          if (external.mode === "split" && external.split) {
+            external.split.mapSplits(
+              (label: string, expression: Expression) => {
+                if (!splitExpressionsMap.has(label)) {
+                  splitExpressionsMap.set(label, expression);
+                }
+              }
+            );
+          }
+        }
+
+        // 递归处理 expressionAlterations（如果存在）
+        // 某些对象可能同时包含 external 和 expressionAlterations
+        if ((alteration as any).expressionAlterations) {
+          this._extractSplitExpressionsFromAlterations(
+            (alteration as any).expressionAlterations,
+            splitExpressionsMap
+          );
+        }
+
+        // 递归处理 datasetAlterations（如果存在）
+        if (
+          (alteration as any).datasetAlterations &&
+          Array.isArray((alteration as any).datasetAlterations)
+        ) {
+          for (const nestedItem of (alteration as any).datasetAlterations) {
+            // 处理嵌套项的 external
+            if (
+              nestedItem.external &&
+              nestedItem.external.mode === "split" &&
+              nestedItem.external.split
+            ) {
+              nestedItem.external.split.mapSplits(
+                (label: string, expression: Expression) => {
+                  if (!splitExpressionsMap.has(label)) {
+                    splitExpressionsMap.set(label, expression);
+                  }
+                }
+              );
+            }
+
+            // 继续递归处理嵌套的 expressionAlterations
+            if (nestedItem.expressionAlterations) {
+              this._extractSplitExpressionsFromAlterations(
+                nestedItem.expressionAlterations,
+                splitExpressionsMap
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * 使用 subtotalsSpec 优化计算表达式
    * 通过 simulateQueryPlan 获取所有查询，然后合并为一个带有 subtotalsSpec 的 groupBy 查询
+   *
+   * 关键修复：
+   * - simulateQueryPlan 和 _extractSplitExpressionsFromExternals 都会消耗表达式状态
+   * - 在 compute() 中为两个操作分别创建独立的表达式副本
+   * - 通过参数传入第二个副本，确保 ex 都是完整的
+   *
+   * @param context 计算上下文
+   * @param options 计算选项
+   * @param expressionForQueryPlan 用于生成查询计划的独立表达式副本
    */
   private _computeWithSubtotalsSpec(
     context: Datum,
-    options: ComputeOptions
+    options: ComputeOptions,
+    expressionForQueryPlan: Expression
   ): Promise<PlywoodValue> {
     try {
-      // 1. 使用 simulateQueryPlan 获取所有查询的 JSON
-      const queryPlan = this.simulateQueryPlan(context, options);
-      console.log("获取到查询计划，组数:", queryPlan.length);
+      // 1. 使用 this 提取 split expressions（第一个副本）
+      const splitExpressionsMap = this._extractSplitExpressionsFromExternals(
+        this,
+        options.concurrentQueryLimit
+      );
+
+      // 2. 使用传入的独立副本生成查询计划（第二个副本）
+      const queryPlan = expressionForQueryPlan.simulateQueryPlan(
+        context,
+        options
+      );
 
       if (queryPlan.length === 0) {
         throw new Error("没有生成查询计划");
       }
 
-      // 2. 合并查询为一个带有 subtotalsSpec 的 groupBy 查询
+      // 3. 合并查询为一个带有 subtotalsSpec 的 groupBy 查询
       const mergedQuery = this._mergeQueriesWithSubtotalsSpec(queryPlan);
-      console.log("合并后的查询:", JSON.stringify(mergedQuery, null, 2));
 
-      // 3. 执行合并后的查询
-      return this._executeSubtotalsQuery(mergedQuery, context, options);
+      // 4. 执行合并后的查询，传入 splitExpressionsMap
+      return this._executeSubtotalsQuery(
+        mergedQuery,
+        context,
+        options,
+        splitExpressionsMap
+      );
     } catch (error) {
       console.error("subtotalsSpec 优化失败，回退到正常计算:", error.message);
       // 回退到正常计算
@@ -2315,14 +2539,10 @@ export abstract class Expression
       const dimensions = Array.from(dimensionsMap.values());
       const dimensionNames = Array.from(dimensionsMap.keys());
 
-      console.log("去重后的维度名称:", dimensionNames);
-
       // 为 subtotalsSpec 生成输出名称（使用 outputName）
       const dimensionOutputNames = dimensions
         .map((dim) => this._extractDimensionOutputName(dim))
         .filter((name) => name !== null);
-
-      console.log("subtotalsSpec 使用的输出名称:", dimensionOutputNames);
 
       const subtotalsSpec: string[][] = [];
 
@@ -2340,10 +2560,6 @@ export abstract class Expression
     // 添加 virtualColumns 到合并查询中
     if (virtualColumnsMap.size > 0) {
       mergedQuery.virtualColumns = Array.from(virtualColumnsMap.values());
-      console.log(
-        "合并的 virtualColumns 数量:",
-        mergedQuery.virtualColumns.length
-      );
     }
 
     // 合并其他参数
@@ -2497,7 +2713,10 @@ export abstract class Expression
    * 注意：需要移除 dimensions.outputName 上可能存在的 dummy 前缀 (***),
    * 以确保与实际数据中的字段名匹配
    */
-  private _extractAttributesFromSubtotalsQuery(query: any): {
+  private _extractAttributesFromSubtotalsQuery(
+    query: any,
+    splitExpressions: Map<string, Expression>
+  ): {
     attributes: any[];
     keys: string[];
   } {
@@ -2511,9 +2730,19 @@ export abstract class Expression
         const outputName = this._stripDummyPrefix(rawName);
         keys.push(outputName);
 
-        // 根据维度类型确定属性类型
+        // 根据 splitExpression 确定属性类型
         let attributeType = "STRING";
-        if (
+        const expression = splitExpressions.get(outputName);
+
+        if (expression) {
+          if (expression instanceof NumberBucketExpression) {
+            attributeType = "NUMBER_RANGE";
+          } else if (expression instanceof TimeBucketExpression) {
+            attributeType = "TIME_RANGE";
+          } else if (expression.type) {
+            attributeType = expression.type;
+          }
+        } else if (
           dimension.outputType === "LONG" ||
           dimension.outputType === "FLOAT"
         ) {
@@ -2696,11 +2925,12 @@ export abstract class Expression
       }
     }
 
-    return {
+    const result: any = {
       attributes: this._buildTopLevelAttributes(attributes, keys),
       keys: [],
       data: [topLevelData],
     };
+    return result;
   }
 
   /**
@@ -2719,35 +2949,33 @@ export abstract class Expression
 
     const currentKey = keys[level];
     const actualKey = this._resolveActualKeyName(currentKey, data);
-    const groups: Record<string, any[]> = {};
+    const groups: Map<string, { rows: any[]; actualValue: any }> = new Map();
 
     // 按当前键（实际字段名）分组数据
     data.forEach((row: any) => {
       const keyValue = row[actualKey];
       if (keyValue !== null && keyValue !== undefined) {
         const groupKey = String(keyValue);
-        if (!groups[groupKey]) {
-          groups[groupKey] = [];
+        if (!groups.has(groupKey)) {
+          groups.set(groupKey, { rows: [], actualValue: keyValue });
         }
-        groups[groupKey].push(row);
+        groups.get(groupKey)!.rows.push(row);
       }
     });
 
     const splitData: any[] = [];
 
     // 为每个分组构建数据项
-    Object.keys(groups).forEach((keyValue) => {
-      const groupData = groups[keyValue];
+    groups.forEach(({ rows: groupData, actualValue }, groupKey) => {
       const splitItem: any = {};
 
-      // 设置当前维度值（对 __time 转换为 TimeRange）
-      const maybeTime = this._maybeConvertTimeKey(query, currentKey, keyValue);
-      splitItem[currentKey] = maybeTime;
+      // 设置当前维度值（使用实际的值，可能是 NumberRange 或 TimeRange 对象）
+      splitItem[currentKey] = actualValue;
 
       // 找到当前分组的聚合数据
       const aggregateRow = groupData.find((row: any) => {
         // 当前维度有值，后续维度为 null 的行就是当前层级的聚合
-        const curMatches = row[actualKey] === keyValue;
+        const curMatches = String(row[actualKey]) === groupKey;
         if (!curMatches) return false;
         if (level + 1 >= keys.length) return true;
         return keys.slice(level + 1).every((k) => {
@@ -2785,7 +3013,7 @@ export abstract class Expression
     // 应用 limitSpec 排序
     this._applySortingToSplitData(splitData, query);
 
-    return {
+    const splitResult = {
       keys: [currentKey],
       attributes: this._buildSplitAttributes(
         attributes,
@@ -2795,6 +3023,7 @@ export abstract class Expression
       ),
       data: splitData,
     };
+    return splitResult;
   }
 
   /**
@@ -2931,15 +3160,54 @@ export abstract class Expression
   }
 
   /**
+   * 从 splitExpressions 生成 inflaters 数组
+   * 参考 _computeResolved 流程中 External.getInteligentInflater 的实现方式
+   * 根据 expression 类型（TimeBucket, NumberBucket, BOOLEAN, NUMBER, TIME 等）
+   * 使用相应的 inflater 工厂函数生成正确的 inflater
+   */
+  private _generateInflaters(
+    query: any,
+    splitExpressions: Map<string, Expression>
+  ): any[] {
+    const inflaters: any[] = [];
+
+    if (!query.dimensions || !Array.isArray(query.dimensions)) {
+      return inflaters;
+    }
+
+    query.dimensions.forEach((dimension: any) => {
+      // 提取维度的输出名称（移除 dummy 前缀）
+      const rawName = dimension.outputName || dimension.dimension;
+      const label = this._stripDummyPrefix(rawName);
+
+      // 从保存的 splitExpressions 中找到对应的 expression
+      const expression = splitExpressions.get(label);
+
+      if (expression) {
+        // 使用 External.getInteligentInflater 生成 inflater
+        // 这个方法会根据 expression 类型自动选择：
+        // - NumberBucketExpression -> numberRangeInflaterFactory
+        // - TimeBucketExpression -> timeRangeInflaterFactory
+        // - BOOLEAN/NUMBER/TIME 等 -> 对应的 simpleInflater
+        const inflater = External.getInteligentInflater(expression, label);
+        if (inflater) {
+          inflaters.push(inflater);
+        }
+      }
+    });
+
+    return inflaters;
+  }
+
+  /**
    * 执行 subtotalsSpec 查询
    */
   private _executeSubtotalsQuery(
     query: any,
     context: Datum,
-    options: ComputeOptions
+    options: ComputeOptions,
+    splitExpressions: Map<string, Expression>
   ): Promise<PlywoodValue> {
-    console.log("执行 subtotalsSpec 查询");
-
     // 1. 找到对应的 DruidExternal
     const druidExternal = this._findDruidExternal(context);
     if (!druidExternal) {
@@ -2958,34 +3226,37 @@ export abstract class Expression
     }
 
     // 3. 从查询中提取 attributes 和 keys 信息
-    const extractedInfo = this._extractAttributesFromSubtotalsQuery(query);
-    console.log("提取的查询信息:", extractedInfo);
+    const extractedInfo = this._extractAttributesFromSubtotalsQuery(
+      query,
+      splitExpressions
+    );
 
-    // 4. 构建查询上下文
+    // 4. 使用 splitExpressions 生成 inflaters
+    const inflaters = this._generateInflaters(query, splitExpressions);
+
+    // 5. 构建查询上下文
     const queryContext: any = {
       timestamp: null,
       ignorePrefix: "!",
       dummyPrefix: "***",
     };
 
-    // 5. 创建 postTransform 函数
-    // 使用提取的 attributes 和 keys 信息
+    // 6. 【修改】创建 postTransform 函数，传入正确的 inflaters
     const postTransform = External.postTransformFactory(
-      [], // inflaters - 暂时为空，因为我们直接处理 subtotalsSpec 结果
-      [], // attributes - 暂时为空，我们将在后处理中构建层级结构
-      null, // keys - 暂时为空
+      inflaters, // 【修改】使用生成的 inflaters
+      extractedInfo.attributes,
+      extractedInfo.keys,
       null // zeroTotalApplies
     );
 
-    // 6. 构建 QueryAndPostTransform 对象
+    // 7. 构建 QueryAndPostTransform 对象
     const queryAndPostTransform = {
       query,
       context: queryContext,
       postTransform,
     };
 
-    // 7. 直接使用 External.performQueryAndPostTransform
-    console.log("直接执行 subtotalsSpec 查询:", JSON.stringify(query, null, 2));
+    // 8. 直接使用 External.performQueryAndPostTransform
 
     try {
       const resultStream = External.performQueryAndPostTransform(
@@ -2996,17 +3267,14 @@ export abstract class Expression
         customOptions
       );
 
-      // 8. 将流转换为 PlywoodValue，然后转换为层级结构
+      // 9. 将流转换为 PlywoodValue，然后转换为层级结构
       return External.buildValueFromStream(resultStream).then((result: any) => {
-        console.log("subtotalsSpec 查询执行成功，开始构建层级结构");
-
         // 将扁平化结果转换为层级结构
         const hierarchicalResult = this._buildHierarchicalDataset(
           result,
           query,
           extractedInfo
         );
-        console.log("层级结构构建完成");
 
         // 使用 Dataset.fromJS 创建正确的 Dataset 对象
         return Dataset.fromJS(hierarchicalResult);
