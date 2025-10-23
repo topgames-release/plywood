@@ -2407,6 +2407,7 @@ export abstract class Expression
    * - simulateQueryPlan 和 _extractSplitExpressionsFromExternals 都会消耗表达式状态
    * - 在 compute() 中为两个操作分别创建独立的表达式副本
    * - 通过参数传入第二个副本，确保 ex 都是完整的
+   * - 并行执行 timeseries 总计查询和 subtotalsSpec 查询，合并结果
    *
    * @param context 计算上下文
    * @param options 计算选项
@@ -2434,11 +2435,15 @@ export abstract class Expression
         throw new Error("没有生成查询计划");
       }
 
-      // 3. 合并查询为一个带有 subtotalsSpec 的 groupBy 查询
+      // 3. 提取 timeseries 总计查询
+      const timeseriesQuery = this._extractTimeseriesQuery(queryPlan);
+
+      // 4. 合并查询为一个带有 subtotalsSpec 的 groupBy 查询
       const mergedQuery = this._mergeQueriesWithSubtotalsSpec(queryPlan);
 
-      // 4. 执行合并后的查询，传入 splitExpressionsMap
-      return this._executeSubtotalsQuery(
+      // 5. 并行执行两个查询并合并结果
+      return this._executeQueriesInParallel(
+        timeseriesQuery,
         mergedQuery,
         context,
         options,
@@ -2449,6 +2454,280 @@ export abstract class Expression
       // 回退到正常计算
       return this._computeResolved(options);
     }
+  }
+
+  /**
+   * 从查询计划中提取 timeseries 查询（用于获取总计行）
+   */
+  private _extractTimeseriesQuery(queryPlan: any[][]): any | null {
+    for (const group of queryPlan) {
+      for (const query of group) {
+        if (query.queryType === "timeseries") {
+          return { ...query };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * 并行执行 timeseries 总计查询和 subtotalsSpec 查询，然后合并结果
+   */
+  private _executeQueriesInParallel(
+    timeseriesQuery: any | null,
+    subtotalsQuery: any,
+    context: Datum,
+    options: ComputeOptions,
+    splitExpressions: Map<string, Expression>
+  ): Promise<PlywoodValue> {
+    // 找到 DruidExternal
+    const druidExternal = this._findDruidExternal(context);
+    if (!druidExternal) {
+      throw new Error("未找到 DruidExternal 数据源");
+    }
+
+    // 提取 attributes 和 keys 信息
+    const extractedInfo = this._extractAttributesFromSubtotalsQuery(
+      subtotalsQuery,
+      splitExpressions
+    );
+
+    // 创建并行执行的 Promise 数组
+    const promises: Promise<any>[] = [];
+
+    // 1. 执行 subtotalsSpec 查询（保持原有逻辑）
+    const subtotalsPromise = this._executeSubtotalsQuery(
+      subtotalsQuery,
+      context,
+      options,
+      splitExpressions
+    );
+    promises.push(subtotalsPromise);
+
+    // 2. 如果有 timeseries 查询，并行执行
+    let totalRowPromise: Promise<any> | null = null;
+    if (timeseriesQuery) {
+      totalRowPromise = this._executeTotalRowQuery(
+        timeseriesQuery,
+        druidExternal,
+        options,
+        extractedInfo
+      );
+      promises.push(totalRowPromise);
+    }
+
+    // 3. 等待两个查询都完成
+    return Promise.all(promises).then((results) => {
+      const subtotalsResult = results[0]; // subtotalsSpec 查询结果（已经是扁平化的对象）
+      const totalRowData = results[1]; // timeseries 查询结果（可能为 undefined）
+
+      // 4. 合并结果（将总计行插入到 subtotals 结果中）
+      const mergedResult = this._mergeTotalRowIntoSubtotalsResult(
+        subtotalsResult,
+        totalRowData,
+        extractedInfo.keys
+      );
+
+      // 5. 构建层级结构
+      const hierarchicalResult = this._buildHierarchicalDataset(
+        mergedResult,
+        subtotalsQuery,
+        extractedInfo
+      );
+
+      // 6. 转换为 Dataset
+      return Dataset.fromJS(hierarchicalResult);
+    });
+  }
+
+  /**
+   * 执行 subtotalsSpec 查询（保持原有逻辑不变）
+   */
+  private _executeSubtotalsQuery(
+    query: any,
+    context: Datum,
+    options: ComputeOptions,
+    splitExpressions: Map<string, Expression>
+  ): Promise<any> {
+    // 找到 DruidExternal
+    const druidExternal = this._findDruidExternal(context);
+    if (!druidExternal) {
+      throw new Error("未找到 DruidExternal 数据源");
+    }
+
+    const { rawQueries, customOptions } = options;
+    const { engine } = druidExternal;
+    const requester = druidExternal.requester;
+
+    if (!requester) {
+      throw new Error(
+        "DruidExternal 缺少 requester，请确保在创建 External 时传入了 requester"
+      );
+    }
+
+    // 提取 attributes 和 keys 信息
+    const extractedInfo = this._extractAttributesFromSubtotalsQuery(
+      query,
+      splitExpressions
+    );
+
+    // 生成 inflaters
+    const inflaters = this._generateInflaters(query, splitExpressions);
+
+    // 构建查询上下文
+    const queryContext: any = {
+      timestamp: null,
+      ignorePrefix: "!",
+      dummyPrefix: "***",
+    };
+
+    // 创建 postTransform 函数
+    const postTransform = External.postTransformFactory(
+      inflaters,
+      extractedInfo.attributes,
+      extractedInfo.keys,
+      null // zeroTotalApplies
+    );
+
+    // 构建 QueryAndPostTransform 对象
+    const queryAndPostTransform = {
+      query,
+      context: queryContext,
+      postTransform,
+    };
+
+    // 执行查询
+    const resultStream = External.performQueryAndPostTransform(
+      queryAndPostTransform,
+      requester,
+      engine,
+      rawQueries,
+      customOptions
+    );
+
+    // 将流转换为结果对象（返回扁平化的数据）
+    return External.buildValueFromStream(resultStream);
+  }
+
+  /**
+   * 执行 timeseries 总计查询，获取真实的总计行数据
+   */
+  private _executeTotalRowQuery(
+    query: any,
+    druidExternal: any,
+    options: ComputeOptions,
+    extractedInfo: { attributes: any[]; keys: string[] }
+  ): Promise<any> {
+    const { rawQueries, customOptions } = options;
+    const { engine } = druidExternal;
+    const requester = druidExternal.requester;
+
+    if (!requester) {
+      throw new Error(
+        "DruidExternal 缺少 requester，请确保在创建 External 时传入了 requester"
+      );
+    }
+
+    // 构建查询上下文
+    const queryContext: any = {
+      timestamp: null,
+      ignorePrefix: "!",
+      dummyPrefix: "***",
+    };
+
+    // timeseries 查询不需要 inflaters，因为没有维度
+    const postTransform = External.postTransformFactory(
+      [], // 空的 inflaters
+      extractedInfo.attributes,
+      [], // timeseries 没有 keys
+      null // zeroTotalApplies
+    );
+
+    // 构建 QueryAndPostTransform 对象
+    const queryAndPostTransform = {
+      query,
+      context: queryContext,
+      postTransform,
+    };
+
+    // 执行查询
+    const resultStream = External.performQueryAndPostTransform(
+      queryAndPostTransform,
+      requester,
+      engine,
+      rawQueries,
+      customOptions
+    );
+
+    // 将流转换为结果对象
+    return External.buildValueFromStream(resultStream).then((result: any) => {
+      // timeseries 查询返回的数据格式：{ data: [ {...} ] }
+      // 提取第一行数据作为总计行
+      if (
+        result &&
+        result.data &&
+        Array.isArray(result.data) &&
+        result.data.length > 0
+      ) {
+        return result.data[0];
+      }
+      return null;
+    });
+  }
+
+  /**
+   * 将 timeseries 查询得到的总计行数据合并到 subtotalsSpec 查询结果中
+   * 注意：需要去重，如果 subtotals 结果中已有总计行，则替换；否则插入
+   */
+  private _mergeTotalRowIntoSubtotalsResult(
+    subtotalsResult: any,
+    totalRowData: any,
+    keys: string[]
+  ): any {
+    if (
+      !subtotalsResult ||
+      !subtotalsResult.data ||
+      !Array.isArray(subtotalsResult.data)
+    ) {
+      return subtotalsResult;
+    }
+
+    // 如果没有总计行数据，直接返回原结果
+    if (!totalRowData) {
+      return subtotalsResult;
+    }
+
+    const data = subtotalsResult.data;
+
+    // 查找 subtotals 结果中是否已存在总计行（所有维度字段为 null）
+    const existingTotalRowIndex = data.findIndex((row: any) =>
+      keys.every((k) => {
+        const actualKey = this._resolveActualKeyName(k, [row]);
+        return row[actualKey] === null || row[actualKey] === undefined;
+      })
+    );
+
+    // 构建完整的总计行（包含所有维度字段设为 null）
+    const enhancedTotalRow = { ...totalRowData };
+    keys.forEach((k) => {
+      const actualKey = this._resolveActualKeyName(k, data);
+      if (!(actualKey in enhancedTotalRow)) {
+        enhancedTotalRow[actualKey] = null;
+      }
+    });
+
+    if (existingTotalRowIndex >= 0) {
+      // 如果已存在总计行，替换它（使用 timeseries 查询的准确数据）
+      data[existingTotalRowIndex] = enhancedTotalRow;
+    } else {
+      // 如果不存在总计行（可能因为 limit 被截断），插入到数组开头
+      data.unshift(enhancedTotalRow);
+    }
+
+    return {
+      ...subtotalsResult,
+      data,
+    };
   }
 
   /**
@@ -2695,17 +2974,6 @@ export abstract class Expression
       if (Object.prototype.hasOwnProperty.call(row, prefixed)) return prefixed;
     }
     return requestedKey;
-  }
-
-  /**
-   * 判断一行是否为“总计行”（所有维度键均为 null/undefined）
-   */
-  private _rowMatchesTotal(row: any, keys: string[]): boolean {
-    for (const k of keys) {
-      const actual = this._resolveActualKeyName(k, [row]);
-      if (!(row[actual] === null || row[actual] === undefined)) return false;
-    }
-    return true;
   }
 
   /**
@@ -3197,93 +3465,6 @@ export abstract class Expression
     });
 
     return inflaters;
-  }
-
-  /**
-   * 执行 subtotalsSpec 查询
-   */
-  private _executeSubtotalsQuery(
-    query: any,
-    context: Datum,
-    options: ComputeOptions,
-    splitExpressions: Map<string, Expression>
-  ): Promise<PlywoodValue> {
-    // 1. 找到对应的 DruidExternal
-    const druidExternal = this._findDruidExternal(context);
-    if (!druidExternal) {
-      throw new Error("未找到 DruidExternal 数据源");
-    }
-
-    // 2. 获取必要的查询执行参数
-    const { rawQueries, customOptions } = options;
-    const { engine } = druidExternal;
-    const requester = druidExternal.requester;
-
-    if (!requester) {
-      throw new Error(
-        "DruidExternal 缺少 requester，请确保在创建 External 时传入了 requester"
-      );
-    }
-
-    // 3. 从查询中提取 attributes 和 keys 信息
-    const extractedInfo = this._extractAttributesFromSubtotalsQuery(
-      query,
-      splitExpressions
-    );
-
-    // 4. 使用 splitExpressions 生成 inflaters
-    const inflaters = this._generateInflaters(query, splitExpressions);
-
-    // 5. 构建查询上下文
-    const queryContext: any = {
-      timestamp: null,
-      ignorePrefix: "!",
-      dummyPrefix: "***",
-    };
-
-    // 6. 【修改】创建 postTransform 函数，传入正确的 inflaters
-    const postTransform = External.postTransformFactory(
-      inflaters, // 【修改】使用生成的 inflaters
-      extractedInfo.attributes,
-      extractedInfo.keys,
-      null // zeroTotalApplies
-    );
-
-    // 7. 构建 QueryAndPostTransform 对象
-    const queryAndPostTransform = {
-      query,
-      context: queryContext,
-      postTransform,
-    };
-
-    // 8. 直接使用 External.performQueryAndPostTransform
-
-    try {
-      const resultStream = External.performQueryAndPostTransform(
-        queryAndPostTransform,
-        requester,
-        engine,
-        rawQueries,
-        customOptions
-      );
-
-      // 9. 将流转换为 PlywoodValue，然后转换为层级结构
-      return External.buildValueFromStream(resultStream).then((result: any) => {
-        // 将扁平化结果转换为层级结构
-        const hierarchicalResult = this._buildHierarchicalDataset(
-          result,
-          query,
-          extractedInfo
-        );
-
-        // 使用 Dataset.fromJS 创建正确的 Dataset 对象
-        return Dataset.fromJS(hierarchicalResult);
-      });
-    } catch (error) {
-      console.error("subtotalsSpec 查询执行失败:", error.message);
-      // 回退到正常计算
-      return this._computeResolved(options);
-    }
   }
 
   /**
