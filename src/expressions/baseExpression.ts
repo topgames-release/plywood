@@ -2460,14 +2460,27 @@ export abstract class Expression
    * 从查询计划中提取 timeseries 查询（用于获取总计行）
    */
   private _extractTimeseriesQuery(queryPlan: any[][]): any | null {
+    // 优先选择带有明确聚合名称（且不为 __VALUE__）的 timeseries，避免“value”模式导致的度量名坍缩
+    let fallback: any = null;
+    let preferred: any = null;
     for (const group of queryPlan) {
       for (const query of group) {
-        if (query.queryType === "timeseries") {
-          return { ...query };
+        if (query.queryType !== "timeseries") continue;
+        if (!fallback) fallback = { ...query };
+        const aggs = Array.isArray(query.aggregations)
+          ? query.aggregations
+          : [];
+        const hasNamedAggs =
+          aggs.length > 0 &&
+          aggs.some((a: any) => a && a.name && a.name !== "__VALUE__");
+        if (hasNamedAggs) {
+          preferred = { ...query };
+          break;
         }
       }
+      if (preferred) break;
     }
-    return null;
+    return preferred || fallback;
   }
 
   /**
@@ -2602,7 +2615,7 @@ export abstract class Expression
       requester,
       engine,
       rawQueries,
-      customOptions
+      customOptions || {}
     );
 
     // 将流转换为结果对象（返回扁平化的数据）
@@ -2656,7 +2669,7 @@ export abstract class Expression
       requester,
       engine,
       rawQueries,
-      customOptions
+      customOptions || {}
     );
 
     // 将流转换为结果对象
@@ -2751,16 +2764,11 @@ export abstract class Expression
       }
     }
 
-    if (!templateQuery) {
-      throw new Error("未找到 timeseries 查询作为模板");
-    }
-
-    if (dimensionQueries.length === 0) {
-      throw new Error("未找到维度查询");
-    }
+    if (!templateQuery) throw new Error("未找到 timeseries 查询作为模板");
+    if (dimensionQueries.length === 0) throw new Error("未找到维度查询");
 
     // 以 timeseries 查询为模板，转换为 groupBy 查询
-    const mergedQuery = {
+    const mergedQuery: any = {
       ...templateQuery,
       queryType: "groupBy",
       granularity: "all",
@@ -2768,47 +2776,31 @@ export abstract class Expression
 
     // 收集所有 virtualColumns 并去重
     const virtualColumnsMap = new Map<string, any>();
-
-    // 从模板查询中添加 virtualColumns
-    if (
-      templateQuery.virtualColumns &&
-      Array.isArray(templateQuery.virtualColumns)
-    ) {
+    if (Array.isArray(templateQuery.virtualColumns)) {
       for (const vc of templateQuery.virtualColumns) {
-        if (vc.name) {
-          virtualColumnsMap.set(vc.name, vc);
-        }
+        if (vc.name) virtualColumnsMap.set(vc.name, vc);
       }
     }
 
-    // 收集所有维度并去重
+    // 收集所有维度并去重，同时合并 virtualColumns
     const dimensionsMap = new Map<string, any>();
-
-    // 从维度查询中提取维度信息和 virtualColumns
-    for (const query of dimensionQueries) {
-      // 收集 virtualColumns
-      if (query.virtualColumns && Array.isArray(query.virtualColumns)) {
-        for (const vc of query.virtualColumns) {
-          if (vc.name && !virtualColumnsMap.has(vc.name)) {
+    for (const dq of dimensionQueries) {
+      if (Array.isArray(dq.virtualColumns)) {
+        for (const vc of dq.virtualColumns) {
+          if (vc.name && !virtualColumnsMap.has(vc.name))
             virtualColumnsMap.set(vc.name, vc);
-          }
         }
       }
 
-      // 收集维度
-      if (query.dimension) {
-        // topN 查询的维度
-        const dimName = this._extractDimensionName(query.dimension);
-        if (dimName && !dimensionsMap.has(dimName)) {
-          dimensionsMap.set(dimName, query.dimension);
-        }
-      } else if (query.dimensions && Array.isArray(query.dimensions)) {
-        // groupBy 查询的维度
-        for (const dim of query.dimensions) {
+      if (dq.dimension) {
+        const dimName = this._extractDimensionName(dq.dimension);
+        if (dimName && !dimensionsMap.has(dimName))
+          dimensionsMap.set(dimName, dq.dimension);
+      } else if (Array.isArray(dq.dimensions)) {
+        for (const dim of dq.dimensions) {
           const dimName = this._extractDimensionName(dim);
-          if (dimName && !dimensionsMap.has(dimName)) {
+          if (dimName && !dimensionsMap.has(dimName))
             dimensionsMap.set(dimName, dim);
-          }
         }
       }
     }
@@ -2816,37 +2808,76 @@ export abstract class Expression
     // 生成 subtotalsSpec
     if (dimensionsMap.size > 0) {
       const dimensions = Array.from(dimensionsMap.values());
-      const dimensionNames = Array.from(dimensionsMap.keys());
+      mergedQuery.dimensions = dimensions;
 
-      // 为 subtotalsSpec 生成输出名称（使用 outputName）
       const dimensionOutputNames = dimensions
-        .map((dim) => this._extractDimensionOutputName(dim))
-        .filter((name) => name !== null);
+        .map((dim: any) => this._extractDimensionOutputName(dim))
+        .filter((name) => name !== null) as string[];
 
       const subtotalsSpec: string[][] = [];
-
-      // 生成所有可能的维度组合（使用 outputName）
       for (let i = dimensionOutputNames.length; i > 0; i--) {
         subtotalsSpec.push(dimensionOutputNames.slice(0, i));
       }
       // 添加空数组表示总计
       subtotalsSpec.push([]);
-
-      mergedQuery.dimensions = dimensions;
       mergedQuery.subtotalsSpec = subtotalsSpec;
     }
 
     // 添加 virtualColumns 到合并查询中
-    if (virtualColumnsMap.size > 0) {
+    if (virtualColumnsMap.size > 0)
       mergedQuery.virtualColumns = Array.from(virtualColumnsMap.values());
+
+    // 合并 aggregations / postAggregations（以维度查询中的定义为准）
+    const aggMap = new Map<string, any>();
+    const postAggMap = new Map<string, any>();
+
+    for (const dq of dimensionQueries) {
+      if (Array.isArray(dq.aggregations)) {
+        for (const agg of dq.aggregations) {
+          if (!agg || !agg.name) continue;
+          if (agg.name === "__VALUE__") continue; // 跳过 value 模式的占位名
+          if (!aggMap.has(agg.name)) aggMap.set(agg.name, agg);
+        }
+      }
+      if (Array.isArray(dq.postAggregations)) {
+        for (const pa of dq.postAggregations) {
+          if (!pa || !pa.name) continue;
+          if (!postAggMap.has(pa.name)) postAggMap.set(pa.name, pa);
+        }
+      }
     }
 
-    // 合并其他参数
-    for (const query of dimensionQueries) {
-      // 合并 having
-      if (query.having && !mergedQuery.having) {
-        mergedQuery.having = query.having;
+    // 若维度查询没有提供，则回退使用模板 timeseries 的聚合定义
+    const templateAggs = Array.isArray(templateQuery.aggregations)
+      ? templateQuery.aggregations
+      : [];
+    const templatePostAggs = Array.isArray(templateQuery.postAggregations)
+      ? templateQuery.postAggregations
+      : [];
+
+    if (aggMap.size === 0 && templateAggs.length > 0) {
+      for (const agg of templateAggs) {
+        if (!agg || !agg.name) continue;
+        // 如果模板里也有 __VALUE__，且存在其他具名度量，则忽略 __VALUE__
+        if (agg.name === "__VALUE__" && templateAggs.length > 1) continue;
+        if (!aggMap.has(agg.name)) aggMap.set(agg.name, agg);
       }
+    }
+
+    if (postAggMap.size === 0 && templatePostAggs.length > 0) {
+      for (const pa of templatePostAggs) {
+        if (!pa || !pa.name) continue;
+        if (!postAggMap.has(pa.name)) postAggMap.set(pa.name, pa);
+      }
+    }
+
+    if (aggMap.size > 0) mergedQuery.aggregations = Array.from(aggMap.values());
+    if (postAggMap.size > 0)
+      mergedQuery.postAggregations = Array.from(postAggMap.values());
+
+    // 合并其他参数：having
+    for (const dq of dimensionQueries) {
+      if (dq.having && !mergedQuery.having) mergedQuery.having = dq.having;
     }
 
     // 合并所有排序规则（维度排序 + 指标排序）
@@ -3109,8 +3140,19 @@ export abstract class Expression
     if (keyValue instanceof Date) {
       start = keyValue as Date;
     } else if (typeof keyValue === "string" || typeof keyValue === "number") {
-      const d = new Date(keyValue as any);
-      if (isNaN(d as any)) return keyValue;
+      let parsed = keyValue as any;
+      if (typeof parsed === "string") {
+        let s = parsed;
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}Z$/.test(s))
+          s = s.replace(/Z$/, ":00:00Z");
+        else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(s))
+          s = s.replace(/Z$/, ":00Z");
+        else if (/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(s)) s = s + ":00:00Z";
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s = s + "T00:00:00Z";
+        parsed = s;
+      }
+      const d = new Date(parsed as any);
+      if (isNaN(d.getTime())) return keyValue;
       start = d;
     } else {
       return keyValue;
@@ -3219,11 +3261,24 @@ export abstract class Expression
     const actualKey = this._resolveActualKeyName(currentKey, data);
     const groups: Map<string, { rows: any[]; actualValue: any }> = new Map();
 
+    // 将复杂键（如 TimeRange/NumberRange/Date）稳定为字符串用于分组键
+    const keyToStableString = (v: any): string => {
+      if (v == null) return "__NULL__";
+      if (typeof v === "number") return String(v);
+      if (v instanceof Date) return String(v.valueOf());
+      if (typeof v === "object") {
+        const maybeStart: any = (v as any).start;
+        if (maybeStart instanceof Date) return String(maybeStart.valueOf());
+        if (typeof maybeStart === "number") return String(maybeStart);
+      }
+      return String(v);
+    };
+
     // 按当前键（实际字段名）分组数据
     data.forEach((row: any) => {
       const keyValue = row[actualKey];
       if (keyValue !== null && keyValue !== undefined) {
-        const groupKey = String(keyValue);
+        const groupKey = keyToStableString(keyValue);
         if (!groups.has(groupKey)) {
           groups.set(groupKey, { rows: [], actualValue: keyValue });
         }
@@ -3237,13 +3292,18 @@ export abstract class Expression
     groups.forEach(({ rows: groupData, actualValue }, groupKey) => {
       const splitItem: any = {};
 
-      // 设置当前维度值（使用实际的值，可能是 NumberRange 或 TimeRange 对象）
-      splitItem[currentKey] = actualValue;
+      // 设置当前维度值（使用实际的值，可能是 NumberRange 或 TimeRange 对象），并在是 __time 时进行 TimeRange 转换
+      const maybeValue = this._maybeConvertTimeKey(
+        query,
+        currentKey,
+        actualValue
+      );
+      splitItem[currentKey] = maybeValue;
 
       // 找到当前分组的聚合数据
       const aggregateRow = groupData.find((row: any) => {
         // 当前维度有值，后续维度为 null 的行就是当前层级的聚合
-        const curMatches = String(row[actualKey]) === groupKey;
+        const curMatches = keyToStableString(row[actualKey]) === groupKey;
         if (!curMatches) return false;
         if (level + 1 >= keys.length) return true;
         return keys.slice(level + 1).every((k) => {
@@ -3313,13 +3373,31 @@ export abstract class Expression
     }
 
     // 支持多列排序，按照 columns 数组的顺序进行排序
+    // 注意：避免对 TimeRange 等复杂对象调用 String()，否则会触发 toString() 并可能抛错
+    const coerceForCompare = (v: any): number | string | null => {
+      if (v == null) return null;
+      if (typeof v === "number") return v;
+      if (v instanceof Date) return v.valueOf();
+      if (typeof v === "object") {
+        // TimeRange / NumberRange：优先用 start 值进行比较
+        const maybeStart: any = (v as any).start;
+        if (maybeStart instanceof Date) return maybeStart.valueOf();
+        if (typeof maybeStart === "number") return maybeStart;
+      }
+      // 其他类型按字符串比较
+      return String(v);
+    };
+
     splitData.sort((a: any, b: any) => {
       for (const sortColumn of sortColumns) {
         const dimension = sortColumn.dimension;
         const direction = sortColumn.direction || "ascending";
 
-        const aValue = a[dimension];
-        const bValue = b[dimension];
+        const aRaw = a[dimension];
+        const bRaw = b[dimension];
+
+        const aValue = coerceForCompare(aRaw);
+        const bValue = coerceForCompare(bRaw);
 
         let comparison = 0;
 
@@ -3335,7 +3413,7 @@ export abstract class Expression
           if (direction === "descending") {
             // 降序：大的值排在前面
             if (typeof aValue === "number" && typeof bValue === "number") {
-              comparison = bValue - aValue;
+              comparison = (bValue as number) - (aValue as number);
             } else {
               // 字符串降序比较
               const aStr = String(aValue);
@@ -3345,7 +3423,7 @@ export abstract class Expression
           } else {
             // 升序：小的值排在前面
             if (typeof aValue === "number" && typeof bValue === "number") {
-              comparison = aValue - bValue;
+              comparison = (aValue as number) - (bValue as number);
             } else {
               // 字符串升序比较
               const aStr = String(aValue);
@@ -3445,11 +3523,12 @@ export abstract class Expression
 
     query.dimensions.forEach((dimension: any) => {
       // 提取维度的输出名称（移除 dummy 前缀）
-      const rawName = dimension.outputName || dimension.dimension;
-      const label = this._stripDummyPrefix(rawName);
+      const rawName = dimension.outputName || dimension.dimension; // 这里可能包含 '***' 前缀
+      const labelForMap = this._stripDummyPrefix(rawName); // 用于在 splitExpressions 中查找表达式
+      const labelForInflater = rawName; // 保持与查询返回的数据字段名一致，避免读取不到值
 
       // 从保存的 splitExpressions 中找到对应的 expression
-      const expression = splitExpressions.get(label);
+      const expression = splitExpressions.get(labelForMap);
 
       if (expression) {
         // 使用 External.getInteligentInflater 生成 inflater
@@ -3457,7 +3536,10 @@ export abstract class Expression
         // - NumberBucketExpression -> numberRangeInflaterFactory
         // - TimeBucketExpression -> timeRangeInflaterFactory
         // - BOOLEAN/NUMBER/TIME 等 -> 对应的 simpleInflater
-        const inflater = External.getInteligentInflater(expression, label);
+        const inflater = External.getInteligentInflater(
+          expression,
+          labelForInflater
+        );
         if (inflater) {
           inflaters.push(inflater);
         }

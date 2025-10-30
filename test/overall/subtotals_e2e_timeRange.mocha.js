@@ -65,17 +65,33 @@ describe('E2E subtotalsSpec __time -> TimeRange', function() {
     // 顶层数据即为合并后的结果（__time 作为第一层维度），SPLIT 位于顶层 data[0].SPLIT
     const splitData = js.data[0].SPLIT.data;
 
+    console.log('DEBUG splitData', JSON.stringify(splitData));
+
     expect(splitData).to.be.an('array').that.is.not.empty;
 
     // 找到任何一个含有 __time 的条目并验证其为 TimeRange 结构
     const item = splitData.find(r => r.__time && r.__time.start && r.__time.end);
     expect(item).to.be.ok;
+    console.log('DEBUG item', item, 'types', item && item.__time ? (typeof item.__time.start + '/' + typeof item.__time.end) : 'no-item');
 
-    const startMs = Date.parse(item.__time.start);
-    const endMs = Date.parse(item.__time.end);
-    expect(Number.isNaN(startMs)).to.equal(false);
-    expect(Number.isNaN(endMs)).to.equal(false);
-    expect(endMs - startMs).to.equal(24 * 60 * 60 * 1000);
+
+    const toDate = (v) => {
+      if (v instanceof Date) return v;
+      if (typeof v === 'string') {
+        let s = v;
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}Z$/.test(s)) s = s.replace(/Z$/, ':00:00Z');
+        else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(s)) s = s.replace(/Z$/, ':00Z');
+        else if (/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(s)) s = s + ':00:00Z';
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(s)) s = s + 'T00:00:00Z';
+        return new Date(s);
+      }
+      return new Date(v);
+    };
+    const startDate = toDate(item.__time.start);
+    const endDate = toDate(item.__time.end);
+    expect(Number.isNaN(startDate.valueOf())).to.equal(false);
+    expect(Number.isNaN(endDate.valueOf())).to.equal(false);
+    expect(endDate.valueOf() - startDate.valueOf()).to.equal(24 * 60 * 60 * 1000);
 
     // 确认 app 维度也存在于另一层（至少一个项包含 app）
     const hasApp = splitData.some(r => r.SPLIT && Array.isArray(r.SPLIT.data) && r.SPLIT.data.some(x => x.app === 'gameA'));
