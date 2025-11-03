@@ -99,10 +99,14 @@ export function extractTimeseriesQuery(
 
 /**
  * 从 queryPlan 合并出一个包含 subtotalsSpec 的 groupBy 查询。
+ * @param _host 宿主表达式实例
+ * @param queryPlan 查询计划
+ * @param maxQueries 最大查询数量限制（用于 limitSpec.limit），默认 10000
  */
 export function buildMergedQuery(
   _host: any,
-  queryPlan: QueryPlan
+  queryPlan: QueryPlan,
+  maxQueries?: number
 ): GroupByQuery {
   // 找到第一个 timeseries 查询作为模板，并收集维度查询
   let templateQuery: any = null;
@@ -238,7 +242,8 @@ export function buildMergedQuery(
     mergedQuery.limitSpec = {
       type: "default",
       columns: sortColumns,
-      limit: 10000,
+      limit:
+        typeof maxQueries === "number" && maxQueries > 0 ? maxQueries : 10000,
     };
   }
 

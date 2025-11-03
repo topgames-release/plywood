@@ -65,7 +65,12 @@ export class SubtotalsSpecHelper {
     const timeseriesQuery: any | null = extractTimeseriesQuery(host, queryPlan);
 
     // 4) 合并查询为一个带有 subtotalsSpec 的 groupBy 查询
-    const mergedQuery: any = buildMergedQuery(host, queryPlan);
+    // 从 options 中提取 maxQueries 参数（默认 500）
+    const maxQueries =
+      options && typeof options.maxQueries === "number"
+        ? options.maxQueries
+        : 500;
+    const mergedQuery: any = buildMergedQuery(host, queryPlan, maxQueries);
 
     // 5) 并行执行两个查询并合并结果 -> 返回 Dataset
     return executeQueriesInParallel(
