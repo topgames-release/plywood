@@ -11,6 +11,38 @@ export type DatasetLike = any;    // 结果数据集占位（与 Plywood Dataset
 
 export type SplitExpressionsMap = Map<string, any>;
 
+export type DruidHavingComparisonType =
+  | "lessThan"
+  | "greaterThan"
+  | "equalTo";
+
+export interface DruidHavingComparison {
+  type: DruidHavingComparisonType;
+  aggregation: string;
+  value: number;
+}
+
+export interface DruidHavingAnd {
+  type: "and";
+  havingSpecs: DruidHavingFilter[];
+}
+
+export interface DruidHavingOr {
+  type: "or";
+  havingSpecs: DruidHavingFilter[];
+}
+
+export interface DruidHavingNot {
+  type: "not";
+  havingSpec: DruidHavingFilter;
+}
+
+export type DruidHavingFilter =
+  | DruidHavingComparison
+  | DruidHavingAnd
+  | DruidHavingOr
+  | DruidHavingNot;
+
 // 执行上下文与选项（与现有 ComputeOptions/Datum 保持松耦合）
 export interface ExecContext {
   context: any; // Datum
@@ -20,4 +52,3 @@ export interface ExecContext {
 // 稳定 key 生成/比较等占位类型
 export type StableKey = string | number;
 export type Comparator<T> = (a: T, b: T) => number;
-

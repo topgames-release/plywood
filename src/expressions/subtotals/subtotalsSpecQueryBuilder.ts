@@ -3,7 +3,12 @@
  * 第二阶段：迁移查询构建实现，去除对宿主私有方法的依赖。
  */
 
-import { QueryPlan, GroupByQuery, TimeseriesQuery } from "./subtotalsSpecTypes";
+import {
+  QueryPlan,
+  GroupByQuery,
+  TimeseriesQuery,
+  DruidHavingFilter,
+} from "./subtotalsSpecTypes";
 
 // —— 工具函数 ——
 function extractDimensionName(dim: any): string | null {
@@ -106,7 +111,8 @@ export function extractTimeseriesQuery(
 export function buildMergedQuery(
   _host: any,
   queryPlan: QueryPlan,
-  maxQueries?: number
+  maxQueries?: number,
+  explicitHaving?: DruidHavingFilter | null
 ): GroupByQuery {
   // 找到第一个 timeseries 查询作为模板，并收集维度查询
   let templateQuery: any = null;
@@ -231,9 +237,13 @@ export function buildMergedQuery(
   if (postAggMap.size > 0)
     mergedQuery.postAggregations = Array.from(postAggMap.values());
 
-  // 合并 having（按首次出现）
-  for (const dq of dimensionQueries) {
-    if (dq.having && !mergedQuery.having) mergedQuery.having = dq.having;
+  if (explicitHaving) {
+    mergedQuery.having = explicitHaving;
+  } else {
+    // 合并 having（按首次出现）
+    for (const dq of dimensionQueries) {
+      if (dq.having && !mergedQuery.having) mergedQuery.having = dq.having;
+    }
   }
 
   // 合并排序

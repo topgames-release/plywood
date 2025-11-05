@@ -2059,7 +2059,8 @@ export abstract class Expression
           return readyExpression1._computeWithSubtotalsSpec(
             introspectedContext,
             options,
-            readyExpression2 // 传入第二个副本用于生成 queryPlan
+            readyExpression2, // 传入第二个副本用于生成 queryPlan
+            this // 原始表达式作为 host
           );
         }
 
@@ -2418,11 +2419,12 @@ export abstract class Expression
   private _computeWithSubtotalsSpec(
     context: Datum,
     options: ComputeOptions,
-    expressionForQueryPlan: Expression
+    expressionForQueryPlan: Expression,
+    hostExpression?: Expression
   ): Promise<PlywoodValue> {
     try {
       return SubtotalsSpecHelper.computeWithSubtotalsSpec(
-        this as any,
+        hostExpression || this,
         context,
         options,
         expressionForQueryPlan
