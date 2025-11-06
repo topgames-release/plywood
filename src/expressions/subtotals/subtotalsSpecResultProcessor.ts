@@ -342,6 +342,63 @@ function buildSimpleSplit(
   };
 }
 
+// —— 修复辅助：在无 __time 维度时基于 intervals 计算毫秒并仅在顶层注入 ——
+function hasExplicitTimeDimensionInGroupBy(query: any): boolean {
+  if (!query || !Array.isArray(query.dimensions)) return false;
+  return query.dimensions.some((dim: any) => {
+    const dimName = (dim && (dim.dimension || dim.outputName)) || null;
+    return dimName === "__time";
+  });
+}
+
+function parseISOIntervalToMillis(interval: string): number | null {
+  if (typeof interval !== "string") return null;
+  const parts = interval.split("/");
+  if (parts.length !== 2) return null;
+
+  const normalize = (s: string): string => {
+    let t = (s || "").trim();
+    // 补全缺省的时间/秒/时区，保证 Date 可解析
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t + "T00:00:00Z";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}$/.test(t)) return t + ":00:00Z";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}Z$/.test(t)) return t.replace(/Z$/, ":00:00Z");
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(t)) return t + ":00Z";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z$/.test(t))
+      return t.replace(/Z$/, ":00Z");
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(t)) return t + "Z";
+    return t;
+  };
+
+  const startStr = normalize(parts[0]);
+  const endStr = normalize(parts[1]);
+  const start = new Date(startStr).valueOf();
+  const end = new Date(endStr).valueOf();
+  if (!isFinite(start) || !isFinite(end)) return null;
+  const diff = end - start;
+  return diff >= 0 ? diff : null;
+}
+
+function computeIntervalMillisFromQuery(query: any): number | null {
+  if (!query) return null;
+  const { intervals } = query as any;
+  if (!intervals) return null;
+  if (Array.isArray(intervals) && intervals.length > 0) {
+    // 取第一个区间
+    const first = intervals[0];
+    if (typeof first === "string") return parseISOIntervalToMillis(first);
+    if (
+      first &&
+      typeof first.start === "string" &&
+      typeof first.end === "string"
+    ) {
+      return parseISOIntervalToMillis(`${first.start}/${first.end}`);
+    }
+    return null;
+  }
+  if (typeof intervals === "string") return parseISOIntervalToMillis(intervals);
+  return null;
+}
+
 export function buildHierarchicalDataset(
   _host: any,
   flatResult: any,
@@ -357,23 +414,99 @@ export function buildHierarchicalDataset(
     subtotalsSpec.length === 0
   )
     return flatResult;
+
   const data = flatResult.data;
   const actualKeys = keys.map((k) => resolveActualKeyName(k, data));
   const totalRow = data.find((row: any) =>
     actualKeys.every((ak) => row[ak] == null)
   );
   if (!totalRow) return flatResult;
+
+  // 构建顶层数据：仅从总计行复制数值指标
   const topLevelData: any = {};
   attributes.forEach((attr: any) => {
     if (attr.type === "NUMBER" && totalRow[attr.name] !== undefined)
       topLevelData[attr.name] = totalRow[attr.name];
   });
+
+  // 构建 SPLIT（不向嵌套层注入 *_MillisecondsInInterval）
   if (keys.length > 0) {
     const splitData = buildSimpleSplit(data, keys, attributes, 0, query);
     if (splitData && splitData.data.length > 0) topLevelData.SPLIT = splitData;
   }
+
+  // 注入 MillisecondsInInterval（仅顶层）：
+  // 触发条件：groupBy.dimensions 不包含 __time；
+  // 数值来源：timeseries 模板继承到 merged groupBy 的 intervals（start/end 差）
+  const hasTimeDim = hasExplicitTimeDimensionInGroupBy(query);
+  const intervalMs = hasTimeDim ? null : computeIntervalMillisFromQuery(query);
+
+  let finalTopLevelAttributes = buildTopLevelAttributes(attributes, keys);
+  if (intervalMs != null) {
+    try {
+      // 计算需要追加后缀字段的指标集合（排除维度键与已存在的 *_MillisecondsInInterval）
+      const metricNames: string[] = attributes
+        .filter(
+          (a: any) =>
+            a &&
+            a.type === "NUMBER" &&
+            !keys.includes(a.name) &&
+            a.name !== "__VALUE__" &&
+            a.name !== "MillisecondsInInterval" &&
+            !/_MillisecondsInInterval$/.test(a.name)
+        )
+        .map((a: any) => a.name);
+
+      // 仅在顶层数据注入，不更改用于 SPLIT 的 attributes
+      if (topLevelData["MillisecondsInInterval"] === undefined)
+        topLevelData["MillisecondsInInterval"] = intervalMs;
+      for (const m of metricNames) {
+        const fieldName = `${m}_MillisecondsInInterval`;
+        if (topLevelData[fieldName] === undefined)
+          topLevelData[fieldName] = intervalMs;
+      }
+
+      // 顶层 attributes 需要包含新增的字段；嵌套 SPLIT 不包含
+      const baseTopLevel = finalTopLevelAttributes.filter(
+        (a) => a && a.name !== "SPLIT"
+      );
+      // Replace Set with an object-backed membership to avoid env/polyfill issues
+      const __haveBacking: Record<string, true> = Object.create(null);
+      for (const a of Array.isArray(baseTopLevel) ? baseTopLevel : []) {
+        if (a && typeof a.name === "string") __haveBacking[a.name] = true;
+      }
+      const have = {
+        has: (k: string) =>
+          Object.prototype.hasOwnProperty.call(__haveBacking, k),
+        add: (k: string) => {
+          __haveBacking[k] = true as true;
+        },
+      } as { has: (k: string) => boolean; add: (k: string) => void };
+      if (!have.has("MillisecondsInInterval")) {
+        baseTopLevel.push({ name: "MillisecondsInInterval", type: "NUMBER" });
+        have.add("MillisecondsInInterval");
+      }
+      for (const m of metricNames) {
+        const fn = `${m}_MillisecondsInInterval`;
+        if (!have.has(fn)) baseTopLevel.push({ name: fn, type: "NUMBER" });
+      }
+      // 保持 SPLIT 的位置与存在性
+      if (finalTopLevelAttributes.some((a) => a.name === "SPLIT")) {
+        baseTopLevel.push({ name: "SPLIT", type: "DATASET" });
+      }
+      finalTopLevelAttributes = baseTopLevel;
+    } catch (e) {
+      try {
+        console.error("[subtotalsSpec][inject-ms] block error (non-fatal)", {
+          error: ((e as any) && (e as any).message) || String(e),
+        });
+      } catch {}
+      // 非致命：出现异常时不影响整体流程，继续返回已构建的数据
+    }
+  }
+
   return {
-    attributes: buildTopLevelAttributes(attributes, keys),
+    attributes: finalTopLevelAttributes,
     keys: [],
     data: [topLevelData],
   };
