@@ -1,6 +1,6 @@
 {
   "name": "@topgames/plywood",
-  "version": "0.21.2-bi.24.0",
+  "version": "0.22.2-bi.25.0",
   "description": "A query planner and executor",
   "keywords": [
     "split",
