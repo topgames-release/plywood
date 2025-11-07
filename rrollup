@@ -29,6 +29,11 @@ cat \
   build/datatypes/set.js \
   build/datatypes/dataset.js \
   build/datatypes/valueStream.js \
+  build/expressions/subtotalsSpecHelper.js \
+  build/expressions/subtotals/subtotalsSpecTypes.js \
+  build/expressions/subtotals/subtotalsSpecQueryBuilder.js \
+  build/expressions/subtotals/subtotalsSpecExecutor.js \
+  build/expressions/subtotals/subtotalsSpecResultProcessor.js \
   build/expressions/baseExpression.js \
   build/expressions/literalExpression.js \
   build/expressions/refExpression.js \
@@ -131,6 +136,11 @@ cat \
   build/datatypes/set.js \
   build/datatypes/dataset.js \
   build/datatypes/valueStream.js \
+  build/expressions/subtotalsSpecHelper.js \
+  build/expressions/subtotals/subtotalsSpecTypes.js \
+  build/expressions/subtotals/subtotalsSpecQueryBuilder.js \
+  build/expressions/subtotals/subtotalsSpecExecutor.js \
+  build/expressions/subtotals/subtotalsSpecResultProcessor.js \
   build/expressions/baseExpression.js \
   build/expressions/literalExpression.js \
   build/expressions/refExpression.js \

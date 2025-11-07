@@ -565,6 +565,23 @@ export abstract class External {
         return;
       }
 
+      const env =
+        typeof globalThis !== "undefined" &&
+        (globalThis as any).process &&
+        (globalThis as any).process.env
+          ? (globalThis as any).process.env
+          : null;
+      if (env && env.DEBUG__TIME_TEST) {
+        // 仅用于调试：查看传入的原始时间值
+        // 注意：不要在生产环境打印
+        try {
+          // 避免影响对象，复制简单展示
+          const show = typeof v === "object" ? JSON.stringify(v) : String(v);
+          // eslint-disable-next-line no-console
+          console.log("DEBUG timeRangeInflater", label, "raw:", show);
+        } catch {}
+      }
+
       let start = makeDate(v);
       d[label] = new TimeRange({ start, end: duration.shift(start, timezone) });
     };
@@ -730,6 +747,9 @@ export abstract class External {
     rawQueries: any[] | null,
     customOptions: any
   ): ReadableStream {
+    // 避免调用方传入 null/undefined 导致解构失败
+    customOptions = customOptions || {};
+
     if (!requester) {
       return new ReadableError("must have a requester to make queries");
     }

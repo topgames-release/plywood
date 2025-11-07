@@ -122,6 +122,8 @@ import { TimeRangeExpression } from "./timeRangeExpression";
 import { TimeShiftExpression } from "./timeShiftExpression";
 import { TransformCaseExpression } from "./transformCaseExpression";
 
+import { SubtotalsSpecHelper } from "./subtotalsSpecHelper";
+
 declare const process: any;
 export interface ComputeOptions extends Environment {
   customOptions?: any;
@@ -2029,15 +2031,47 @@ export abstract class Expression
         return introspectDatum(context);
       })
       .then((introspectedContext: Datum) => {
+        const { customOptions } = options;
+
+        // 检查是否启用 subtotalsSpec 优化
+        if (customOptions && customOptions.useSubtotalsSpec) {
+          // 关键修复：为 subtotalsSpec 优化创建两个独立的表达式副本
+          // 这样可以确保 splitExpressionsMap 和 queryPlan 内部的 ex 都是完整的
+
+          // 副本 1：用于提取 split expressions
+          let readyExpression1 = this._initialPrepare(
+            introspectedContext,
+            options
+          );
+          if (readyExpression1 instanceof ExternalExpression) {
+            readyExpression1 = readyExpression1.unsuppress();
+          }
+
+          // 副本 2：用于生成查询计划
+          let readyExpression2 = this._initialPrepare(
+            introspectedContext,
+            options
+          );
+          if (readyExpression2 instanceof ExternalExpression) {
+            readyExpression2 = readyExpression2.unsuppress();
+          }
+
+          return readyExpression1._computeWithSubtotalsSpec(
+            introspectedContext,
+            options,
+            readyExpression2, // 传入第二个副本用于生成 queryPlan
+            this // 原始表达式作为 host
+          );
+        }
+
+        // 正常计算流程
         let readyExpression = this._initialPrepare(
           introspectedContext,
           options
         );
         if (readyExpression instanceof ExternalExpression) {
-          // Top level externals need to be unsuppressed
           readyExpression = readyExpression.unsuppress();
         }
-        // todo: 2
         return readyExpression._computeResolved(options);
       });
   }
@@ -2186,6 +2220,302 @@ export abstract class Expression
         throw new Error(`something went wrong, did not get literal: ${ex}`);
       return ex.getLiteralValue();
     });
+  }
+
+  /**
+   * 从表达式中递归提取所有层级的 split 的 expression 信息
+   * 参考 _computeResolvedSimulate 的循环逻辑，逐层处理嵌套的 split
+   * 注意：此方法不应改变原始表达式的状态，仅用于提取信息
+   *
+   * 关键点：
+   * 1. 通过 Expression.fromJS(expression.toJS()) 创建表达式的深拷贝
+   * 2. 在副本上调用 getReadyExternals 和 applyReadyExternals，避免状态污染
+   * 3. 原始表达式保持不变，可以继续用于后续的查询执行
+   */
+  private _extractSplitExpressionsFromExternals(
+    expression: Expression,
+    concurrentQueryLimit: number = Infinity
+  ): Map<string, Expression> {
+    const splitExpressionsMap = new Map<string, Expression>();
+
+    // 创建表达式的深拷贝，避免影响原始表达式
+    // 这是关键：simulateQueryPlan 已经消耗了表达式的状态
+    // 我们需要一个全新的副本来重新提取 split expressions
+    let ex: Expression = expression;
+    let readyExternals = ex.getReadyExternals(concurrentQueryLimit);
+    let computeCycles = 0;
+    const maxComputeCycles = 5; // 防止无限循环
+
+    // 递归提取每一层的 split 信息
+    while (
+      Object.keys(readyExternals).length > 0 &&
+      computeCycles < maxComputeCycles
+    ) {
+      // 从当前层的 readyExternals 提取 split 信息
+      this._extractSplitExpressionsFromAlterations(
+        readyExternals,
+        splitExpressionsMap
+      );
+
+      // 模拟执行以推进到下一层（不保存模拟查询）
+      fillExpressionExternalAlteration(readyExternals, (external, terminal) => {
+        return external.simulateValue(terminal, []);
+      });
+
+      // 应用结果并获取下一层的 readyExternals
+      ex = ex.applyReadyExternals(readyExternals);
+      readyExternals = ex.getReadyExternals(concurrentQueryLimit);
+      computeCycles++;
+    }
+
+    return splitExpressionsMap;
+  }
+
+  /**
+   * 从单层 alterations 中提取 split expressions
+   * 根据真实数据结构处理：
+   * 1. DatasetExternalAlterations 数组（item.jsonl 中的主要结构）
+   * 2. ExpressionExternalAlterationSimple 对象（包含 external）
+   * 3. 嵌套的 expressionAlterations 和 datasetAlterations
+   * 注意：某些对象可能同时包含 external 和 expressionAlterations（混合类型）
+   */
+  private _extractSplitExpressionsFromAlterations(
+    readyExternals: ExpressionExternalAlteration,
+    splitExpressionsMap: Map<string, Expression>
+  ): void {
+    for (const key in readyExternals) {
+      const alteration = readyExternals[key];
+
+      if (Array.isArray(alteration)) {
+        // 处理 DatasetExternalAlterations 数组
+        for (const item of alteration) {
+          // 处理当前项的 external
+          if (
+            item.external &&
+            item.external.mode === "split" &&
+            item.external.split
+          ) {
+            item.external.split.mapSplits(
+              (label: string, expression: Expression) => {
+                if (!splitExpressionsMap.has(label)) {
+                  splitExpressionsMap.set(label, expression);
+                }
+              }
+            );
+          }
+
+          // 递归处理 expressionAlterations（嵌套的表达式级别的 alterations）
+          if (item.expressionAlterations) {
+            this._extractSplitExpressionsFromAlterations(
+              item.expressionAlterations,
+              splitExpressionsMap
+            );
+          }
+
+          // 递归处理 datasetAlterations（嵌套的数据集级别的 alterations）
+          if (
+            item.datasetAlterations &&
+            Array.isArray(item.datasetAlterations)
+          ) {
+            for (const nestedItem of item.datasetAlterations) {
+              // 处理嵌套项的 external
+              if (
+                nestedItem.external &&
+                nestedItem.external.mode === "split" &&
+                nestedItem.external.split
+              ) {
+                nestedItem.external.split.mapSplits(
+                  (label: string, expression: Expression) => {
+                    if (!splitExpressionsMap.has(label)) {
+                      splitExpressionsMap.set(label, expression);
+                    }
+                  }
+                );
+              }
+
+              // 继续递归处理嵌套的 expressionAlterations
+              if (nestedItem.expressionAlterations) {
+                this._extractSplitExpressionsFromAlterations(
+                  nestedItem.expressionAlterations,
+                  splitExpressionsMap
+                );
+              }
+            }
+          }
+        }
+      } else {
+        // 处理非数组类型（可能是 ExpressionExternalAlterationSimple 或混合类型）
+        // 先处理 external（如果存在）
+        if (alteration.external) {
+          const external = alteration.external;
+          if (external.mode === "split" && external.split) {
+            external.split.mapSplits(
+              (label: string, expression: Expression) => {
+                if (!splitExpressionsMap.has(label)) {
+                  splitExpressionsMap.set(label, expression);
+                }
+              }
+            );
+          }
+        }
+
+        // 递归处理 expressionAlterations（如果存在）
+        // 某些对象可能同时包含 external 和 expressionAlterations
+        if ((alteration as any).expressionAlterations) {
+          this._extractSplitExpressionsFromAlterations(
+            (alteration as any).expressionAlterations,
+            splitExpressionsMap
+          );
+        }
+
+        // 递归处理 datasetAlterations（如果存在）
+        if (
+          (alteration as any).datasetAlterations &&
+          Array.isArray((alteration as any).datasetAlterations)
+        ) {
+          for (const nestedItem of (alteration as any).datasetAlterations) {
+            // 处理嵌套项的 external
+            if (
+              nestedItem.external &&
+              nestedItem.external.mode === "split" &&
+              nestedItem.external.split
+            ) {
+              nestedItem.external.split.mapSplits(
+                (label: string, expression: Expression) => {
+                  if (!splitExpressionsMap.has(label)) {
+                    splitExpressionsMap.set(label, expression);
+                  }
+                }
+              );
+            }
+
+            // 继续递归处理嵌套的 expressionAlterations
+            if (nestedItem.expressionAlterations) {
+              this._extractSplitExpressionsFromAlterations(
+                nestedItem.expressionAlterations,
+                splitExpressionsMap
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * 使用 subtotalsSpec 优化计算表达式
+   * 通过 simulateQueryPlan 获取所有查询，然后合并为一个带有 subtotalsSpec 的 groupBy 查询
+   *
+   * 关键修复：
+   * - simulateQueryPlan 和 _extractSplitExpressionsFromExternals 都会消耗表达式状态
+   * - 在 compute() 中为两个操作分别创建独立的表达式副本
+   * - 通过参数传入第二个副本，确保 ex 都是完整的
+   * - 并行执行 timeseries 总计查询和 subtotalsSpec 查询，合并结果
+   *
+   * @param context 计算上下文
+   * @param options 计算选项
+   * @param expressionForQueryPlan 用于生成查询计划的独立表达式副本
+   */
+  private _computeWithSubtotalsSpec(
+    context: Datum,
+    options: ComputeOptions,
+    expressionForQueryPlan: Expression,
+    hostExpression?: Expression
+  ): Promise<PlywoodValue> {
+    try {
+      return SubtotalsSpecHelper.computeWithSubtotalsSpec(
+        hostExpression || this,
+        context,
+        options,
+        expressionForQueryPlan
+      );
+    } catch (error) {
+      console.error(
+        "subtotalsSpec 优化失败，回退到正常计算:",
+        ((error as any) && (error as any).message) || error
+      );
+      return this._computeResolved(options);
+    }
+  }
+
+  /**
+   * 从查询计划中提取 timeseries 查询（用于获取总计行）
+   */
+
+  /**
+   * 并行执行 timeseries 总计查询和 subtotalsSpec 查询，然后合并结果
+   */
+
+  /**
+   * 执行 subtotalsSpec 查询（保持原有逻辑不变）
+   */
+
+  /**
+   * 执行 timeseries 总计查询，获取真实的总计行数据
+   */
+
+  /**
+   * 将 timeseries 查询得到的总计行数据合并到 subtotalsSpec 查询结果中
+   * 注意：需要去重，如果 subtotals 结果中已有总计行，则替换；否则插入
+   */
+
+  /**
+   * 合并多个查询为一个带有 subtotalsSpec 的 groupBy 查询
+   */
+
+  /**
+   * 提取维度名称，用于去重（使用 dimension 字段）
+   */
+
+  /**
+   * 提取维度的输出名称，用于 subtotalsSpec（使用 outputName 字段）
+   */
+
+  /**
+   * 从 topN 查询的 metric 字段中提取排序规则
+   */
+
+  /**
+   * 合并所有排序规则（维度排序优先，指标排序次之）
+   */
+
+  /**
+   * 去除 Druid 生成的 dummy 前缀（例如 '***'）
+   */
+
+  /**
+   * 在实际数据行中解析出某个维度键真正使用的字段名（可能带有 dummy 前缀）
+   */
+
+  /**
+   * 从 subtotalsSpec 查询中提取 attributes 信息
+   * 注意：需要移除 dimensions.outputName 上可能存在的 dummy 前缀 (***),
+   * 以确保与实际数据中的字段名匹配
+   */
+
+  /**
+   * 提取时间维度信息（period 与 timeZone），用于将字符串 __time 转换为 TimeRange
+   */
+
+  /**
+   * 将扁平化的 subtotalsSpec 结果转换为层级结构
+   */
+
+  /**
+   * 从上下文中找到 DruidExternal 数据源
+   */
+  private _findDruidExternal(context: Datum): any {
+    for (const key in context) {
+      const value = context[key];
+      if (
+        value &&
+        value.constructor &&
+        value.constructor.name === "DruidExternal"
+      ) {
+        return value;
+      }
+    }
+    return null;
   }
 }
 

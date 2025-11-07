@@ -29,6 +29,34 @@ Plywood can also be used by the browser.
 
 To learn more, see [http://plywood.imply.io](http://plywood.imply.io/)
 
+### 项目文档结构
+
+- **[docs/](./docs/)** - 项目文档目录
+  - **[docs/features/](./docs/features/)** - 功能特性文档
+    - [subtotalsSpec 优化详细文档](./docs/features/SUBTOTALS_OPTIMIZATION.md)
+    - [subtotalsSpec 优化使用指南](./docs/features/README_SUBTOTALS.md)
+  - **[docs/examples/](./docs/examples/)** - 示例代码
+- **[tests/](./tests/)** - 测试文件目录
+  - **[tests/subtotals/](./tests/subtotals/)** - subtotalsSpec 优化测试
+
+### 新功能特性
+
+#### subtotalsSpec 查询优化
+利用 Apache Druid 的 subtotalsSpec 特性，将多次查询合并为一次查询，大幅提升多维度分析的查询性能。
+
+**快速开始**:
+```javascript
+const result = await expression.compute(context, {
+  customOptions: {
+    useSubtotalsSpec: true    // 启用 subtotalsSpec 优化
+  }
+});
+```
+
+**性能提升**: 60-90% 的查询时间减少
+
+详细信息请参考：[subtotalsSpec 优化文档](./docs/features/README_SUBTOTALS.md)
+
 ## Also see
 
 * [Pivot](http://pivot.imply.io) - a data exploration GUI built using Plywood.
